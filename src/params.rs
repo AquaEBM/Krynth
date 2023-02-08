@@ -1,9 +1,15 @@
 pub mod wt_osc;
 pub mod distortion;
 
-use atomic_refcell::{AtomicRefCell};
+use atomic_refcell::AtomicRefCell;
 use parking_lot::Mutex;
-use plugin_util::{parameter::Modulable, dsp::{processor::{self, Processor}, graph::{Edge, self}}};
+use plugin_util::{
+    parameter::Modulable,
+    dsp::{
+        processor::{Processor, ProcessComponent, ProcessSchedule},
+        graph::{Edge, AudioGraph}
+    }
+};
 use nih_plug::{prelude::*};
 use nih_plug_egui::{EguiState, egui::{Ui, Response, Context, Window}};
 use rtrb::Producer;
@@ -34,7 +40,7 @@ pub struct KrynthParams {
                           pub wt_list        : Arc<[String]>,
                           pub message_sender : Mutex<Producer<AudioGraphEvent>>,
     #[persist = "editor"] pub editor_state   : Arc<EguiState>,
-                          pub audio_graph    : AtomicRefCell<graph::AudioGraph<String, Arc<dyn NodeParemeters>>>
+                          pub audio_graph    : AtomicRefCell<AudioGraph<String, Arc<dyn NodeParemeters>>>
 }
 
 impl KrynthParams {
@@ -49,9 +55,9 @@ impl KrynthParams {
         }
     }
  
-    pub fn build_audio_graph(&self) -> processor::AudioGraph {
+    pub fn build_audio_graph(&self) -> ProcessSchedule {
 
-        let mut graph = processor::AudioGraph::default();
+        let mut graph = ProcessSchedule::default();
 
         for node in self.audio_graph.borrow().iter() {
 
