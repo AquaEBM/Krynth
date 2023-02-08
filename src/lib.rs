@@ -1,4 +1,4 @@
-#![feature(core_intrinsics, array_chunks, iter_intersperse)]
+#![feature(core_intrinsics, array_chunks)]
 
 mod dsp;
 mod params;
@@ -76,6 +76,7 @@ impl Plugin for Krynth {
         struct DummyParams {
             named_field: (),
         }
+
         Arc::new(DummyParams { named_field: () })
     }
 
