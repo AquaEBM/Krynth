@@ -6,10 +6,11 @@ use parking_lot::Mutex;
 use plugin_util::{
     parameter::Modulable,
     dsp::{
-        processor::{Processor, ProcessComponent, ProcessSchedule},
+        processor::{Processor, ProcessSchedule},
         graph::{Edge, AudioGraph}
     }
 };
+
 use nih_plug::{prelude::*};
 use nih_plug_egui::{EguiState, egui::{Ui, Response, Context, Window}};
 use rtrb::Producer;
