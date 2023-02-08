@@ -1,0 +1,27 @@
+[package]
+name = "synth"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "synth"
+path = "src/lib.rs"
+crate-type = ["cdylib","lib"]
+
+[[bin]]
+name = "synth_standalone"
+path = "src/main.rs"
+
+[dependencies]
+
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["standalone"]}
+nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git" }
+plugin_util = { git = "https://github.com/AquaEBM/plugin_util.git" }
+arrayvec = "0.7.2"
+rand = "0.8.5"
+parking_lot = "0.12.1"
+atomic_refcell = "0.1"
+atomic_float = "0.1"
+realfft = "3.1.0"
+hound = "3.5"
+rtrb = "0.2.3"

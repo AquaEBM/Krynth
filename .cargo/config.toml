@@ -1,0 +1,8 @@
+[build]
+
+rustflags = ["-Ctarget-cpu=native", "-Cllvm-args=--ffast-math"]
+
+[profile.release]
+
+lto = "fat"
+panic = "abort"
