@@ -12,7 +12,7 @@ use std::{thread, time::Duration, sync::Arc};
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor};
 
-use plugin_util::dsp::{processor::{Processor, AudioGraph}, sample::StereoSample};
+use plugin_util::dsp::{processor::{Processor, ProcessSchedule}, sample::StereoSample};
 
 use crate::params::NodeParemeters;
 
@@ -26,12 +26,12 @@ pub const MAX_UNISON: usize = 16;
 
 #[non_exhaustive]
 pub enum AudioGraphEvent {
-    UpdateAudioGraph(AudioGraph),
+    UpdateAudioGraph(ProcessSchedule),
 }
 
 pub struct Krynth {
     voice_handler: ArrayVec<u8, MAX_POLYPHONY>,
-    graph: AudioGraph,
+    graph: ProcessSchedule,
     params: Arc<KrynthParams>,
     gui_thread_messages: Consumer<AudioGraphEvent>,
 }
