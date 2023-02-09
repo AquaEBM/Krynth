@@ -16,7 +16,6 @@ use plugin_util::dsp::{processor::{Processor, ProcessSchedule}, sample::StereoSa
 
 use crate::params::NodeParemeters;
 
-pub const NUM_OSCS: usize = 3;
 pub const FRAMES_PER_WT: usize = 256;
 pub const WAVE_FRAME_LEN: usize = 2048;
 pub const NUM_WAVETABLES: usize = WAVE_FRAME_LEN.ilog2() as usize + 1;
