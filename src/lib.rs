@@ -10,7 +10,7 @@ use rtrb::{Consumer, RingBuffer};
 use std::{thread, time::Duration, sync::Arc};
 
 use nih_plug::prelude::*;
-use nih_plug_egui::{create_egui_editor};
+use nih_plug_egui::create_egui_editor;
 
 use plugin_util::dsp::{processor::{Processor, ProcessSchedule}, sample::StereoSample};
 
