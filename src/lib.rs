@@ -66,7 +66,7 @@ impl Plugin for Krynth {
     type BackgroundTask = ();
 
     // Do not expose our plugin's parameters as part of the param map, since plugin APIs
-    // do not really support dynamic adding/removing of parameters, this breks automation and preset saving
+    // do not really support dynamic adding/removing of parameters, this breaks automation and preset saving
     // TODO: Is there a way Around this?.
 
     fn params(&self) -> Arc<dyn Params> {
