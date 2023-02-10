@@ -89,12 +89,6 @@ impl BandlimitedWaveTables {
             )
         }
     }
-
-    /// the last in the list of bandlimited wavetables,
-    /// i.e the original, untouched, non-bandlimited version
-    pub fn last_at(&self, frame: usize) -> &[f32] {
-        self[Self::LAST][frame].split_last().unwrap().1
-    }
 }
 
 /// Computes the frequency spectra of the wavetable. Panics when the waveforms
