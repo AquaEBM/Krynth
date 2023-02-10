@@ -109,9 +109,8 @@ impl NodeParameters for WTOscParams {
 
     fn type_name(&self) -> String { "Oscillator".into() }
 
-    fn processor(&self, global_params: &GlobalParams) -> Box<dyn Processor> {
-        let params = Arc::new(Self::new(global_params));
-        Box::new(WTOsc::new(params))
+    fn processor(self: Arc<Self>) -> Box<dyn Processor> {
+        Box::new(WTOsc::new(self))
     }
 
     fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response {

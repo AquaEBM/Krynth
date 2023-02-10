@@ -10,17 +10,17 @@ use rtrb::{Consumer, RingBuffer};
 use std::{thread, time::Duration, sync::Arc};
 
 use nih_plug::prelude::*;
-use nih_plug_egui::create_egui_editor;
+use nih_plug_egui::{create_egui_editor, egui::{SidePanel, panel::Side}};
 
 use plugin_util::dsp::{processor::{Processor, ProcessSchedule}, sample::StereoSample};
 
-use crate::params::NodeParameters;
+use crate::params::{NodeParameters, wt_osc::WTOscParams};
 
 const MAX_POLYPHONY: usize = 16;
 
 pub struct Krynth {
     voice_handler: ArrayVec<u8, MAX_POLYPHONY>,
-    graph: ProcessSchedule,
+    schedule: ProcessSchedule,
     params: Arc<KrynthParams>,
     gui_thread_messages: Consumer<AudioGraphEvent>,
 }
@@ -32,7 +32,7 @@ impl Default for Krynth {
 
         Self {
             voice_handler: Default::default(),
-            graph: Default::default(),
+            schedule: Default::default(),
             params: Arc::new(KrynthParams::new(producer)),
             gui_thread_messages: consumer,
         }
@@ -78,6 +78,12 @@ impl Plugin for Krynth {
 
             params.graph_data.ui(ctx, setter);
 
+            SidePanel::new(Side::Left, "banana").show(ctx, |ui| {
+                if ui.button("new WTOsc").clicked() {
+                    params.graph_data.insert_top_level_node(Arc::new(WTOscParams::new(&params.global_params)));
+                }
+            });
+
             // Gross workaround for vsync not working.
             thread::sleep(Duration::from_secs_f64((FPS * 1.5).recip()));
         })
@@ -90,7 +96,7 @@ impl Plugin for Krynth {
         _context: &mut impl InitContext<Self>,
     ) -> bool {
 
-        self.graph = self.params.build_audio_graph();
+        self.schedule = self.params.build_audio_graph();
 
         true
     }
@@ -106,7 +112,13 @@ impl Plugin for Krynth {
         let mut next_event = context.next_event();
 
         match self.gui_thread_messages.pop() {
-            Ok(AudioGraphEvent::UpdateAudioGraph(new_graph)) => self.graph = new_graph,
+            Ok(event) => match event {
+                AudioGraphEvent::UpdateAudioGraph(graph) => self.schedule = graph,
+                AudioGraphEvent::Connect(from, to) => self.schedule.edges[from].push(to),
+                AudioGraphEvent::Reschedule(_) => todo!(),
+                AudioGraphEvent::PushNode(_) => todo!(),
+            },
+
             _ => (),
         }
 
@@ -119,7 +131,7 @@ impl Plugin for Krynth {
 
                     NoteEvent::NoteOn { note, .. } => {
                         match self.voice_handler.try_push(note) {
-                            Ok(()) => self.graph.add_voice(
+                            Ok(()) => self.schedule.add_voice(
                                 util::midi_note_to_freq(note) / context.transport().sample_rate
                             ),
                             _ => ()
@@ -131,7 +143,7 @@ impl Plugin for Krynth {
                         for (i, &id) in self.voice_handler.iter().enumerate() {
                             if note == id {
                                 self.voice_handler.swap_remove(i);
-                                self.graph.remove_voice(i);
+                                self.schedule.remove_voice(i);
                                 break;
                             }
                         }

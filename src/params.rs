@@ -31,7 +31,8 @@ pub enum AudioGraphEvent {
     UpdateAudioGraph(ProcessSchedule),
     Connect(usize, usize),
     Reschedule(Box<[usize]>),
-    
+    PushNode(Box<dyn Processor>),
+
 }
 
 pub struct AudioGraphData {
@@ -95,6 +96,8 @@ impl AudioGraphData {
 
         let node_name = format!("{} {count}", node.type_name());
 
+        self.send(AudioGraphEvent::PushNode(Arc::clone(&node).processor()));
+
         self.graph.borrow_mut().top_level_insert(node_name, node);
     }
 }
@@ -126,7 +129,7 @@ pub trait NodeParameters: Params + Any {
 
     fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response;
 
-    fn processor(&self, global_params: &GlobalParams) -> Box<dyn Processor>;
+    fn processor(self: Arc<Self>) -> Box<dyn Processor>;
 
     fn reload(&self) {}
 }
@@ -156,7 +159,7 @@ impl KrynthParams {
         for node in self.graph_data.graph.borrow().iter() {
 
             graph.push(
-                node.data.processor(&self.global_params),
+                node.data.clone().processor(),
                 node.edges().iter().map(|&(Edge::Normal(i) | Edge::Feedback(i))| i).collect()
             );
         }
