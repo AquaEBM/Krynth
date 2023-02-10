@@ -1,11 +1,11 @@
-#![feature(core_intrinsics, array_chunks)]
+#![feature(core_intrinsics, array_chunks, unchecked_math)]
 
 mod dsp;
 mod params;
 
 use arrayvec::ArrayVec;
 use dsp::*;
-use params::KrynthParams;
+use params::{KrynthParams, AudioGraphEvent};
 use rtrb::{Consumer, RingBuffer};
 use std::{thread, time::Duration, sync::Arc};
 
@@ -14,19 +14,9 @@ use nih_plug_egui::create_egui_editor;
 
 use plugin_util::dsp::{processor::{Processor, ProcessSchedule}, sample::StereoSample};
 
-use crate::params::NodeParemeters;
+use crate::params::NodeParameters;
 
-pub const FRAMES_PER_WT: usize = 256;
-pub const WAVE_FRAME_LEN: usize = 2048;
-pub const NUM_WAVETABLES: usize = WAVE_FRAME_LEN.ilog2() as usize + 1;
-pub const PHASE_RANGE: f32 = WAVE_FRAME_LEN as f32;
-pub const MAX_POLYPHONY: usize = 16;
-pub const MAX_UNISON: usize = 16;
-
-#[non_exhaustive]
-pub enum AudioGraphEvent {
-    UpdateAudioGraph(ProcessSchedule),
-}
+const MAX_POLYPHONY: usize = 16;
 
 pub struct Krynth {
     voice_handler: ArrayVec<u8, MAX_POLYPHONY>,
@@ -86,7 +76,7 @@ impl Plugin for Krynth {
         let params = self.params.clone();
         create_egui_editor(params.editor_state.clone(), (), |_, _| {}, move |ctx, setter, _| {
 
-            params.ui(ctx, setter);
+            params.graph_data.ui(ctx, setter);
 
             // Gross workaround for vsync not working.
             thread::sleep(Duration::from_secs_f64((FPS * 1.5).recip()));

@@ -3,10 +3,11 @@ use std::{
 };
 
 use crate::{
-    PHASE_RANGE,
     MAX_POLYPHONY,
-    MAX_UNISON,
-    wavetable::BandlimitedWaveTables,
+    wavetable::{
+        BandlimitedWaveTables,
+        PHASE_RANGE,
+    },
     params::wt_osc::{
         WTOscParams,
         WTOscModValues
@@ -16,6 +17,8 @@ use crate::{
 use arrayvec::ArrayVec;
 use rand::random;
 use plugin_util::dsp::{processor::Processor, sample::{StereoSample, ZERO_SAMPLE}};
+
+pub const MAX_UNISON: usize = 16;
 
 /// Describes a wavetable oscillator
 #[derive(Default)]
@@ -138,6 +141,7 @@ impl WTOscVoice {
 
 pub struct WTOsc {
     params: Arc<WTOscParams>,
+    wavetable: BandlimitedWaveTables,
     voices: ArrayVec<WTOscVoice, MAX_POLYPHONY>,
 }
 
@@ -146,6 +150,7 @@ impl WTOsc {
     pub fn new(params: Arc<WTOscParams>) -> Self {
 
         Self {
+            wavetable: BandlimitedWaveTables::default(),
             params,
             voices: Default::default()
         }
@@ -168,9 +173,8 @@ impl Processor for WTOsc {
     fn process(&mut self, inputs: &mut [StereoSample]) {
 
         let params = self.params.as_ref();
-        let table = params.wavetable.read();
         for (i, (input, voice)) in inputs.iter_mut().zip(self.voices.iter_mut()).enumerate() {
-            *input = voice.process(params.modulated(i), &table);
+            *input = voice.process(params.modulated(i), &self.wavetable);
         }
     }
 }

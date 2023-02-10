@@ -1,8 +1,12 @@
 use std::{ops::Deref, array};
 use realfft::num_complex::Complex32;
 use plugin_util::{dsp::lerp_table, mul};
-use crate::{PHASE_RANGE, WAVE_FRAME_LEN, FRAMES_PER_WT, NUM_WAVETABLES};
 use hound::{WavReader, SampleFormat};
+
+const WAVE_FRAME_LEN: usize = 2048;
+pub const PHASE_RANGE: f32 = WAVE_FRAME_LEN as f32;
+const NUM_WAVETABLES: usize = WAVE_FRAME_LEN.ilog2() as usize + 1;
+pub const FRAMES_PER_WT: usize = 256;
 
 pub type WaveFrame = Box<[f32 ; WAVE_FRAME_LEN + 1]>;
 pub type WaveTable = [WaveFrame ; FRAMES_PER_WT];
@@ -74,9 +78,11 @@ impl BandlimitedWaveTables {
     #[inline]
     pub fn get_sample(&self, phase: f32, frame: usize, phase_delta: f32) -> f32 {
         const INV_PR: f32 = 1. / PHASE_RANGE;
-        let index = 126usize.saturating_sub(mul(phase_delta, INV_PR).to_bits() as usize >> 23);
-        // omit bounds checks
+        
         unsafe {
+
+            let index = 126usize.unchecked_sub(mul(phase_delta, INV_PR).to_bits() as usize >> 23);
+            // omit bounds checks
             lerp_table(
                 self.get_unchecked(index.min(Self::LAST)).get_unchecked(frame).as_slice(),
                 phase
