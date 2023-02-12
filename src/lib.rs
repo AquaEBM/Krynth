@@ -1,18 +1,18 @@
-#![feature(core_intrinsics, array_chunks, unchecked_math)]
+#![feature(core_intrinsics, array_chunks, unchecked_math, trait_upcasting)]
 
 mod dsp;
 mod params;
 
 use arrayvec::ArrayVec;
-use dsp::*;
+use dsp::{*, wavetable_osc::WTOsc};
 use params::{KrynthParams, AudioGraphEvent};
 use rtrb::{Consumer, RingBuffer};
-use std::{thread, time::Duration, sync::Arc};
+use std::{thread, time::Duration, sync::Arc, any::Any};
 
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui::{SidePanel, panel::Side}};
 
-use plugin_util::dsp::{processor::{Processor, ProcessSchedule}, sample::StereoSample};
+use plugin_util::{dsp::{processor::{Processor, ProcessSchedule}, sample::StereoSample}, util::Permute};
 
 use crate::params::{NodeParameters, wt_osc::WTOscParams};
 
@@ -79,13 +79,16 @@ impl Plugin for Krynth {
             params.graph_data.ui(ctx, setter);
 
             SidePanel::new(Side::Left, "banana").show(ctx, |ui| {
+
+                ui.add_space(20.);
+
                 if ui.button("new WTOsc").clicked() {
                     params.graph_data.insert_top_level_node(Arc::new(WTOscParams::new(&params.global_params)));
                 }
             });
 
             // Gross workaround for vsync not working.
-            thread::sleep(Duration::from_secs_f64((FPS * 1.5).recip()));
+            thread::sleep(Duration::from_secs_f64((FPS * 2.).recip()));
         })
     }
 
@@ -113,10 +116,21 @@ impl Plugin for Krynth {
 
         match self.gui_thread_messages.pop() {
             Ok(event) => match event {
+
                 AudioGraphEvent::UpdateAudioGraph(graph) => self.schedule = graph,
+
                 AudioGraphEvent::Connect(from, to) => self.schedule.edges[from].push(to),
-                AudioGraphEvent::Reschedule(_) => todo!(),
-                AudioGraphEvent::PushNode(_) => todo!(),
+
+                AudioGraphEvent::Reschedule(permutation) => self.schedule.permute(permutation),
+
+                AudioGraphEvent::PushNode(node) => self.schedule.push(node, vec![]),
+
+                AudioGraphEvent::SetWaveTable(wavetables, index) => {
+
+                    let any = self.schedule[index].processor.as_mut() as &mut dyn Any;
+                    let wt_osc: &mut WTOsc = any.downcast_mut().expect("this node is not a WTOsc");
+                    wt_osc.wavetables = wavetables;
+                },
             },
 
             _ => (),

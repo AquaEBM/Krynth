@@ -16,7 +16,7 @@ use nih_plug_egui::{EguiState, egui::{Ui, Response, Context, Window, epaint::aha
 use rtrb::Producer;
 use std::{fs::read_dir, sync::Arc, any::{Any, TypeId}, borrow::Borrow};
 
-use crate::MAX_POLYPHONY;
+use crate::{MAX_POLYPHONY, dsp::wavetable::BandlimitedWaveTables};
 
 pub const WAVETABLE_FOLDER_PATH: &str = "C:\\Users\\etulyon1\\Documents\\Coding\\Krynth\\wavetables";
 
@@ -32,7 +32,7 @@ pub enum AudioGraphEvent {
     Connect(usize, usize),
     Reschedule(Box<[usize]>),
     PushNode(Box<dyn Processor>),
-
+    SetWaveTable(Box<BandlimitedWaveTables>, usize),
 }
 
 pub struct AudioGraphData {
@@ -57,7 +57,7 @@ impl AudioGraphData {
 
         for node_params in self.graph.borrow().iter() {
     
-            Window::new(&node_params.data.type_name())
+            Window::new(node_params.id())
                 .fixed_size((400., 500.))
                 .show(ctx, |ui| {
                     node_params.data.ui(ui, setter)

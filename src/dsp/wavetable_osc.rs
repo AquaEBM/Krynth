@@ -141,7 +141,7 @@ impl WTOscVoice {
 
 pub struct WTOsc {
     params: Arc<WTOscParams>,
-    wavetable: BandlimitedWaveTables,
+    pub wavetables: Box<BandlimitedWaveTables>,
     voices: ArrayVec<WTOscVoice, MAX_POLYPHONY>,
 }
 
@@ -150,7 +150,7 @@ impl WTOsc {
     pub fn new(params: Arc<WTOscParams>) -> Self {
 
         Self {
-            wavetable: BandlimitedWaveTables::default(),
+            wavetables: Default::default(),
             params,
             voices: Default::default()
         }
@@ -174,7 +174,7 @@ impl Processor for WTOsc {
 
         let params = self.params.as_ref();
         for (i, (input, voice)) in inputs.iter_mut().zip(self.voices.iter_mut()).enumerate() {
-            *input = voice.process(params.modulated(i), &self.wavetable);
+            *input = voice.process(params.modulated(i), &self.wavetables);
         }
     }
 }
