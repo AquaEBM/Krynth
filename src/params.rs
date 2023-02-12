@@ -80,7 +80,7 @@ impl AudioGraphData {
         if let Some(((from_index, to_index), maybe_schedule)) = self.graph.borrow_mut().connect(from, to) {
             self.send(AudioGraphEvent::Connect(from_index, to_index));
             if let Some(new_schedule) = maybe_schedule {
-                self.send(AudioGraphEvent::Reschedule(new_schedule.into_boxed_slice()));
+                self.send(AudioGraphEvent::Reschedule(new_schedule));
             }
         }
     }
