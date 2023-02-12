@@ -3,7 +3,15 @@ use std::ops::Deref;
 use nih_plug_egui::egui::*;
 use plot::*;
 use rtrb::Producer;
-use crate::{params::{modulable, WAVETABLE_FOLDER_PATH}, NodeParameters, params::ModulableParamHandle, dsp::{wavetable_osc::WTOsc, wavetable::{write_wavetable_from_file, BandlimitedWaveTables}}};
+use crate::{
+    params::{modulable, WAVETABLE_FOLDER_PATH},
+    NodeParameters,
+    params::ModulableParamHandle,
+    dsp::{
+        wavetable_osc::WTOsc,
+        wavetable::{write_wavetable_from_file, BandlimitedWaveTables}
+    }
+};
 use plugin_util::{gui::widgets::*, parameter::ParamHandle, dsp::processor::Processor};
 use nih_plug::prelude::ParamSetter;
 
@@ -182,7 +190,7 @@ impl NodeParameters for WTOscParams {
                         }
                     });
 
-                ui.horizontal( |ui| {
+                ui.horizontal_centered( |ui| {
 
                     let wavetable = self.wavetable.borrow();
 

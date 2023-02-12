@@ -31,7 +31,7 @@ pub fn write_wavetable_from_file(path: impl AsRef<Path>, wt: &mut WaveTable) {
     for buffer in wt.iter_mut() {
         let (wrap_around, window) = buffer.split_last_mut().unwrap();
 
-        window.fill_with(|| samples_iter.next().unwrap());
+        window.fill_with(|| samples_iter.next().unwrap() / 2.);
 
         *wrap_around = window[0];
     }

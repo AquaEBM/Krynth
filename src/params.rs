@@ -45,6 +45,7 @@ pub struct GlobalParams {
 
 impl GlobalParams {
     pub fn new() -> Self {
+
         Self {
             wt_list: read_dir(WAVETABLE_FOLDER_PATH).unwrap().map(|dir| dir
                 .unwrap()
