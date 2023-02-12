@@ -11,7 +11,7 @@ use plugin_util::{
     }
 };
 
-use nih_plug::{prelude::*};
+use nih_plug::prelude::*;
 use nih_plug_egui::{EguiState, egui::{Ui, Response, Context, Window, epaint::ahash::HashMap}};
 use rtrb::Producer;
 use std::{fs::read_dir, sync::Arc, any::{Any, TypeId}, borrow::Borrow};
@@ -102,18 +102,22 @@ impl KrynthParams {
 
     pub fn ui(&self, ctx: &Context, setter: &ParamSetter) {
 
-        for (i, node_params) in self.graph.borrow().iter().enumerate() {
-    
+        for (node_index, node_params) in self.graph.borrow().iter().enumerate() {
+
             Window::new(node_params.id())
                 .fixed_size((400., 500.))
                 .show(ctx, |ui| {
-                    node_params.data.ui(i, ui, setter, &mut self.message_sender.lock());
+                    node_params.data.ui(
+                        node_index,
+                        ui,
+                        setter,
+                        &mut self.message_sender.lock()
+                    );
                 });
         }
     }
 
     pub fn send(&self, event: AudioGraphEvent) {
-
         send(&mut self.message_sender.lock(), event);
     }
 
