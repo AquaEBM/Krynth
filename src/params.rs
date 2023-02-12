@@ -26,16 +26,59 @@ pub fn modulable<T: Param>(param: T) -> ModulableParamHandle<T> {
     Modulable::from(param)
 }
 
+pub fn send<T>(message_sender: &mut Producer<T>, message: T) {
+    while message_sender.is_full() {}
+    message_sender.push(message).unwrap();
+}
+
 #[non_exhaustive]
 pub enum AudioGraphEvent {
-    UpdateAudioGraph(ProcessSchedule),
     Connect(usize, usize),
     Reschedule(Box<[usize]>),
     PushNode(Box<dyn Processor>),
-    SetWaveTable(Box<BandlimitedWaveTables>, usize),
+    SetWaveTable(usize, BandlimitedWaveTables),
 }
 
-pub struct AudioGraphData {
+pub struct GlobalParams {
+    pub wt_list: Arc<[String]>,
+}
+
+impl GlobalParams {
+    pub fn new() -> Self {
+        Self {
+            wt_list: read_dir(WAVETABLE_FOLDER_PATH).unwrap().map(|dir| dir
+                .unwrap()
+                .file_name()
+                .to_str()
+                .unwrap()
+                .trim_end_matches(".WAV")
+                .into()
+            ).collect::<Vec<_>>().into()
+        }
+    }
+}
+
+pub trait NodeParameters: Params + Any {
+
+    fn new(params: &GlobalParams) -> Self where Self: Sized;
+
+    fn type_name(&self) -> String;
+
+    fn ui(
+        &self,
+        node_index: usize,
+        ui: &mut Ui,
+        setter: &ParamSetter,
+        messages_sender: &mut Producer<AudioGraphEvent>
+    ) -> Response;
+
+    fn processor(self: Arc<Self>) -> Box<dyn Processor>;
+}
+
+#[derive(Params)]
+pub struct KrynthParams {
+    pub editor_state: Arc<EguiState>,
+    pub global_params: GlobalParams,
     /// used to send messages to the audio thread
     message_sender: Mutex<Producer<AudioGraphEvent>>,
     /// parameter values of the audio graph, in topological order
@@ -44,9 +87,13 @@ pub struct AudioGraphData {
     node_count_per_type: AtomicRefCell<HashMap<TypeId, usize>>,
 }
 
-impl AudioGraphData {
+impl KrynthParams {
+
     pub fn new(producer: Producer<AudioGraphEvent>) -> Self {
+
         Self {
+            global_params: GlobalParams::new(),
+            editor_state: EguiState::from_size(1140, 590),
             message_sender: Mutex::new(producer),
             graph: Default::default(),
             node_count_per_type: Default::default()
@@ -55,21 +102,19 @@ impl AudioGraphData {
 
     pub fn ui(&self, ctx: &Context, setter: &ParamSetter) {
 
-        for node_params in self.graph.borrow().iter() {
+        for (i, node_params) in self.graph.borrow().iter().enumerate() {
     
             Window::new(node_params.id())
                 .fixed_size((400., 500.))
                 .show(ctx, |ui| {
-                    node_params.data.ui(ui, setter)
+                    node_params.data.ui(i, ui, setter, &mut self.message_sender.lock());
                 });
         }
     }
 
     pub fn send(&self, event: AudioGraphEvent) {
 
-        let mut producer = self.message_sender.lock();
-        while producer.is_full() {}
-        producer.push(event).unwrap();
+        send(&mut self.message_sender.lock(), event);
     }
 
     pub fn connect<Q>(&self, from: &Q, to: &Q)
@@ -100,70 +145,15 @@ impl AudioGraphData {
 
         self.graph.borrow_mut().top_level_insert(node_name, node);
     }
-}
 
-pub struct GlobalParams {
-    pub wt_list: Arc<[String]>,
-}
+    pub fn build_audio_graph(&self, schedule: &mut ProcessSchedule) {
 
-impl GlobalParams {
-    pub fn new() -> Self {
-        Self {
-            wt_list: read_dir(WAVETABLE_FOLDER_PATH).unwrap().map(|dir| dir
-                .unwrap()
-                .file_name()
-                .to_str()
-                .unwrap()
-                .trim_end_matches(".WAV")
-                .into()
-            ).collect::<Vec<_>>().into()
-        }
-    }
-}
+        for node in self.graph.borrow().iter() {
 
-pub trait NodeParameters: Params + Any {
-
-    fn new(params: &GlobalParams) -> Self where Self: Sized;
-
-    fn type_name(&self) -> String;
-
-    fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response;
-
-    fn processor(self: Arc<Self>) -> Box<dyn Processor>;
-
-    fn reload(&self) {}
-}
-
-#[derive(Params)]
-pub struct KrynthParams {
-    #[persist = "editor"] pub editor_state   : Arc<EguiState>,
-                          pub global_params  : GlobalParams,
-                          pub graph_data     : AudioGraphData,
-}
-
-impl KrynthParams {
-
-    pub fn new(producer: Producer<AudioGraphEvent>) -> Self {
-
-        Self {
-            global_params: GlobalParams::new(),
-            editor_state: EguiState::from_size(1140, 590),
-            graph_data: AudioGraphData::new(producer),
-        }
-    }
-
-    pub fn build_audio_graph(&self) -> ProcessSchedule {
-
-        let mut graph = ProcessSchedule::default();
-
-        for node in self.graph_data.graph.borrow().iter() {
-
-            graph.push(
+            schedule.push(
                 node.data.clone().processor(),
                 node.edges().iter().map(|&(Edge::Normal(i) | Edge::Feedback(i))| i).collect()
             );
         }
-
-        graph
     }
 }

@@ -76,14 +76,14 @@ impl Plugin for Krynth {
         let params = self.params.clone();
         create_egui_editor(params.editor_state.clone(), (), |_, _| {}, move |ctx, setter, _| {
 
-            params.graph_data.ui(ctx, setter);
+            params.ui(ctx, setter);
 
             SidePanel::new(Side::Left, "banana").show(ctx, |ui| {
 
-                ui.add_space(20.);
+                ui.add_space(60.);
 
                 if ui.button("new WTOsc").clicked() {
-                    params.graph_data.insert_top_level_node(Arc::new(WTOscParams::new(&params.global_params)));
+                    params.insert_top_level_node(Arc::new(WTOscParams::new(&params.global_params)));
                 }
             });
 
@@ -99,7 +99,7 @@ impl Plugin for Krynth {
         _context: &mut impl InitContext<Self>,
     ) -> bool {
 
-        self.schedule = self.params.build_audio_graph();
+        self.params.build_audio_graph(&mut self.schedule);
 
         true
     }
@@ -117,7 +117,7 @@ impl Plugin for Krynth {
         match self.gui_thread_messages.pop() {
             Ok(event) => match event {
 
-                AudioGraphEvent::UpdateAudioGraph(graph) => self.schedule = graph,
+                // None of these actions are realtime safe (allocations, freeing...)
 
                 AudioGraphEvent::Connect(from, to) => self.schedule.edges[from].push(to),
 
@@ -125,7 +125,7 @@ impl Plugin for Krynth {
 
                 AudioGraphEvent::PushNode(node) => self.schedule.push(node, vec![]),
 
-                AudioGraphEvent::SetWaveTable(wavetables, index) => {
+                AudioGraphEvent::SetWaveTable(index, wavetables) => {
 
                     let any = self.schedule[index].processor.as_mut() as &mut dyn Any;
                     let wt_osc: &mut WTOsc = any.downcast_mut().expect("this node is not a WTOsc");

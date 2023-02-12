@@ -2,22 +2,21 @@ use std::ops::Deref;
 
 use nih_plug_egui::egui::*;
 use plot::*;
-use crate::{params::{modulable, WAVETABLE_FOLDER_PATH}, NodeParameters, params::ModulableParamHandle, dsp::wavetable_osc::WTOsc};
+use rtrb::Producer;
+use crate::{params::{modulable, WAVETABLE_FOLDER_PATH}, NodeParameters, params::ModulableParamHandle, dsp::{wavetable_osc::WTOsc, wavetable::{write_wavetable_from_file, BandlimitedWaveTables}}};
 use plugin_util::{gui::widgets::*, parameter::ParamHandle, dsp::processor::Processor};
 use nih_plug::prelude::ParamSetter;
 
 use std::sync::Arc;
-use nih_plug::{prelude::*, formatters::v2s_f32_rounded, params::persist};
+use nih_plug::{prelude::*, formatters::v2s_f32_rounded};
 use nih_plug_egui::egui::Response;
-use crate::wavetable::BandlimitedWaveTables;
 use plugin_util::{*, dsp::sample::StereoSample};
-use persist::PersistentField;
 
 use atomic_refcell::AtomicRefCell;
 
 use crate::wavetable::{FRAMES_PER_WT, WaveTable, empty_wavetable};
 
-use super::GlobalParams;
+use super::{GlobalParams, AudioGraphEvent, send};
 
 #[derive(Params)]
 pub struct WTOscParams {
@@ -113,7 +112,13 @@ impl NodeParameters for WTOscParams {
         Box::new(WTOsc::new(self))
     }
 
-    fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response {
+    fn ui(
+        &self,
+        node_index: usize,
+        ui: &mut Ui,
+        setter: &ParamSetter,
+        message_sender: &mut Producer<AudioGraphEvent>,
+    ) -> Response {
 
         ui.horizontal(|ui| {
 
@@ -148,7 +153,7 @@ impl NodeParameters for WTOscParams {
             });
 
             ui.vertical_centered_justified(|ui| {
-                let current_name_ref = self.wt_name.borrow();
+                let mut current_name_ref = self.wt_name.borrow_mut();
 
                 ComboBox::from_id_source(ui.id().with("combobox"))
                     .width(ui.available_width())
@@ -156,19 +161,28 @@ impl NodeParameters for WTOscParams {
                     .show_ui(ui, |ui| {
                         for name in self.wt_list.iter() {
 
-                            if ui.selectable_label(name == current_name_ref.deref(), name).clicked() {
+                            if ui.selectable_label(name == current_name_ref.as_str(), name).clicked() {
 
-                                // to free the AtomicRefCell borrow
-                                drop(current_name_ref);
+                                let mut wavetable = self.wavetable.borrow_mut();
 
-                                self.wt_name.set(name.to_string());
-                                self.reload();
-                                break;
+                                *current_name_ref = name.clone();
+                                write_wavetable_from_file(
+                                    format!("{WAVETABLE_FOLDER_PATH}\\{name}.WAV"),
+                                    &mut wavetable
+                                );
+
+                                send(
+                                    message_sender,
+                                    AudioGraphEvent::SetWaveTable(
+                                        node_index,
+                                        BandlimitedWaveTables::from_wavetable(&wavetable)
+                                    )
+                                )
                             }
                         }
                     });
 
-                ui.horizontal_centered( |ui| {
+                ui.horizontal( |ui| {
 
                     let wavetable = self.wavetable.borrow();
 
@@ -187,13 +201,5 @@ impl NodeParameters for WTOscParams {
                 });
             })
         }).response
-    }
-
-    fn reload(&self) {
-
-        let wt_name = self.wt_name.borrow();
-        let wt_name = wt_name.as_str();
-        let new_wavetable = BandlimitedWaveTables::from_file(format!("{WAVETABLE_FOLDER_PATH}\\{wt_name}.WAV"));
-        *self.wavetable.borrow_mut() = new_wavetable.last().unwrap().clone();
     }
 }

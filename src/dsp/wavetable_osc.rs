@@ -141,7 +141,7 @@ impl WTOscVoice {
 
 pub struct WTOsc {
     params: Arc<WTOscParams>,
-    pub wavetables: Box<BandlimitedWaveTables>,
+    pub wavetables: BandlimitedWaveTables,
     voices: ArrayVec<WTOscVoice, MAX_POLYPHONY>,
 }
 
