@@ -66,7 +66,7 @@ impl BandlimitedWaveTables {
 
         let spectra = spectra_from_wavetable(wt);
 
-        Self { data: bandlimited_wavetables(wt.clone(), spectra) }
+        Self { data: bandlimited_wavetables(wt.clone(), &spectra) }
     }
 
     /// Resample the value at the given `frame` and `phase` `phase_delta` is
@@ -120,7 +120,7 @@ pub fn spectra_from_wavetable(wavetable: &WaveTable) -> Box<[Box<[Complex32]>]> 
 /// the third 2, the forth 4, the fifth 8, etc...
 pub fn bandlimited_wavetables(
     wavetable: WaveTable,
-    spectra: Box<[Box<[Complex32]>]>,
+    spectra: &[Box<[Complex32]>],
 ) -> Box<[WaveTable ; NUM_WAVETABLES]> {
 
     let mut c2r = realfft::RealFftPlanner::<f32>::new();

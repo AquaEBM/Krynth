@@ -1,4 +1,4 @@
-#![feature(core_intrinsics, array_chunks, unchecked_math, trait_upcasting)]
+#![feature(core_intrinsics, array_chunks, trait_upcasting)]
 
 mod dsp;
 mod params;
@@ -114,14 +114,14 @@ impl Plugin for Krynth {
 
         let mut next_event = context.next_event();
 
-        match self.gui_thread_messages.pop() {
-            Ok(event) => match event {
+        while let Ok(event) = self.gui_thread_messages.pop() {
+            match event {
 
-                // None of these actions are realtime safe (allocations, freeing...)
+                // None of these actions are realtime safe for now (allocations, freeing...)
 
                 AudioGraphEvent::Connect(from, to) => self.schedule.edges[from].push(to),
 
-                AudioGraphEvent::Reschedule(permutation) => self.schedule.permute(permutation),
+                AudioGraphEvent::Reschedule(mut permutation) => self.schedule.permute(&mut permutation),
 
                 AudioGraphEvent::PushNode(node) => self.schedule.push(node, vec![]),
 
@@ -131,9 +131,7 @@ impl Plugin for Krynth {
                     let wt_osc: &mut WTOsc = any.downcast_mut().expect("this node is not a WTOsc");
                     wt_osc.wavetables = wavetables;
                 },
-            },
-
-            _ => (),
+            }
         }
 
         for (i, sample) in buffer.iter_samples().enumerate() {
@@ -144,11 +142,10 @@ impl Plugin for Krynth {
                 match event {
 
                     NoteEvent::NoteOn { note, .. } => {
-                        match self.voice_handler.try_push(note) {
-                            Ok(()) => self.schedule.add_voice(
+                        if let Ok(()) = self.voice_handler.try_push(note) {
+                            self.schedule.add_voice(
                                 util::midi_note_to_freq(note) / context.transport().sample_rate
-                            ),
-                            _ => ()
+                            )
                         };
                     },
 

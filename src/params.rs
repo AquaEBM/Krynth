@@ -7,14 +7,14 @@ use plugin_util::{
     parameter::Modulable,
     dsp::{
         processor::{Processor, ProcessSchedule},
-        graph::{Edge, AudioGraph}
+        graph::AudioGraph
     }
 };
 
 use nih_plug::prelude::*;
 use nih_plug_egui::{EguiState, egui::{Ui, Response, Context, Window, epaint::ahash::HashMap}};
 use rtrb::Producer;
-use std::{fs::read_dir, sync::Arc, any::{Any, TypeId}, borrow::Borrow};
+use std::{fs::read_dir, sync::Arc, any::{Any, TypeId}};
 
 use crate::{MAX_POLYPHONY, dsp::wavetable::BandlimitedWaveTables};
 
@@ -83,7 +83,7 @@ pub struct KrynthParams {
     /// used to send messages to the audio thread
     message_sender: Mutex<Producer<AudioGraphEvent>>,
     /// parameter values of the audio graph, in topological order
-    graph: AtomicRefCell<AudioGraph<String, Arc<dyn NodeParameters>>>,
+    graph: AtomicRefCell<AudioGraph<Arc<dyn NodeParameters>>>,
     /// used to keep track of how many of the same node type is there, (counters...)
     node_count_per_type: AtomicRefCell<HashMap<TypeId, usize>>,
 }
@@ -105,10 +105,10 @@ impl KrynthParams {
 
         for (node_index, node_params) in self.graph.borrow().iter().enumerate() {
 
-            Window::new(node_params.id())
+            Window::new(node_index.to_string())
                 .fixed_size((400., 500.))
                 .show(ctx, |ui| {
-                    node_params.data.ui(
+                    node_params.ui(
                         node_index,
                         ui,
                         setter,
@@ -122,16 +122,10 @@ impl KrynthParams {
         send(&mut self.message_sender.lock(), event);
     }
 
-    pub fn connect<Q>(&self, from: &Q, to: &Q)
-    where
-        String: Borrow<Q>,
-        Q: Eq + ?Sized,
-    {
-        if let Some(((from_index, to_index), maybe_schedule)) = self.graph.borrow_mut().connect(from, to) {
-            self.send(AudioGraphEvent::Connect(from_index, to_index));
-            if let Some(new_schedule) = maybe_schedule {
-                self.send(AudioGraphEvent::Reschedule(new_schedule));
-            }
+    pub fn connect<Q>(&self, from: usize, to: usize) {
+        if let Some(new_schedule) = self.graph.borrow_mut().connect(from, to) {
+            self.send(AudioGraphEvent::Connect(from, to));
+            self.send(AudioGraphEvent::Reschedule(new_schedule));
         }
     }
 
@@ -142,22 +136,20 @@ impl KrynthParams {
 
         *map.entry(id).or_insert(0) += 1;
 
-        let count = map.get(&id).unwrap().to_string();
-
-        let node_name = format!("{} {count}", node.type_name());
-
         self.send(AudioGraphEvent::PushNode(Arc::clone(&node).processor()));
 
-        self.graph.borrow_mut().top_level_insert(node_name, node);
+        self.graph.borrow_mut().top_level_insert(node);
     }
 
     pub fn build_audio_graph(&self, schedule: &mut ProcessSchedule) {
 
-        for node in self.graph.borrow().iter() {
+        let graph = self.graph.borrow();
+
+        for (node, edges) in graph.iter().zip(graph.edges().iter()) {
 
             schedule.push(
-                node.data.clone().processor(),
-                node.edges().iter().map(|&(Edge::Normal(i) | Edge::Feedback(i))| i).collect()
+                node.clone().processor(),
+                edges.clone()
             );
         }
     }
