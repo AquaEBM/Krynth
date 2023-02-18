@@ -80,7 +80,7 @@ impl Plugin for Krynth {
 
             SidePanel::new(Side::Left, "banana").show(ctx, |ui| {
 
-                ui.add_space(60.);
+                ui.add_space(40.);
 
                 if ui.button("new WTOsc").clicked() {
                     params.insert_top_level_node(Arc::new(WTOscParams::new(&params.global_params)));

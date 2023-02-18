@@ -60,8 +60,6 @@ impl Default for BandlimitedWaveTables {
 
 impl BandlimitedWaveTables {
 
-    const LAST: usize = NUM_WAVETABLES - 1;
-
     pub fn from_wavetable(wt: &WaveTable) -> Self {
 
         let spectra = spectra_from_wavetable(wt);
@@ -80,7 +78,7 @@ impl BandlimitedWaveTables {
         unsafe {
             // omit bounds checks
             lerp_table(
-                self.get_unchecked(index.min(Self::LAST)).get_unchecked(frame).as_slice(),
+                self.get_unchecked(index.min(NUM_WAVETABLES - 1)).get_unchecked(frame).as_slice(),
                 phase
             )
         }
