@@ -11,7 +11,6 @@ use crate::{
 };
 use nih_plug_egui::egui::*;
 use plot::*;
-use rtrb::Producer;
 
 use nih_plug::prelude::ParamSetter;
 use plugin_util::{dsp::processor::Processor, gui::widgets::*, parameter::ParamHandle};
@@ -25,7 +24,7 @@ use atomic_refcell::AtomicRefCell;
 
 use crate::wavetable::{empty_wavetable, WaveTable, FRAMES_PER_WT};
 
-use super::{GlobalParams, MainThreadMessage};
+use super::GlobalParams;
 
 #[derive(Params)]
 pub struct WTOscParams {
@@ -145,7 +144,7 @@ impl NodeParameters for WTOscParams {
         wt_osc
     }
 
-    fn ui(&self, node_index: usize, ui: &mut Ui, setter: &ParamSetter) -> Response {
+    fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response {
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.add(ParamWidget::new(

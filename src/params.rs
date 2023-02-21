@@ -16,6 +16,7 @@ use nih_plug_egui::{
     egui::{Context, Response, Ui, Window},
     EguiState,
 };
+
 use rtrb::{Consumer, Producer};
 use std::{
     any::{Any, TypeId},
@@ -33,21 +34,6 @@ pub type ModulableParamHandle<T> = Modulable<T, MAX_POLYPHONY>;
 
 pub fn modulable<T: Param>(param: T) -> ModulableParamHandle<T> {
     Modulable::from(param)
-}
-
-pub fn send<T>(message_sender: &mut Producer<T>, message: T) {
-    while message_sender.is_full() {}
-    message_sender.push(message).unwrap();
-}
-
-#[non_exhaustive]
-pub enum MainThreadMessage {
-    BuildAudioGraph(ProcessSchedule),
-}
-
-#[non_exhaustive]
-pub enum ProcessingThreadMessage {
-    FreeGraph(ProcessSchedule),
 }
 
 pub struct GlobalParams {
@@ -80,7 +66,7 @@ pub trait NodeParameters: Params + Any {
 
     fn type_name(&self) -> String;
 
-    fn ui(&self, node_index: usize, ui: &mut Ui, setter: &ParamSetter) -> Response;
+    fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response;
 
     fn processor(self: Arc<Self>) -> Box<dyn Processor + Send>;
 }
@@ -91,10 +77,10 @@ pub struct KrynthParams {
     pub global_params: GlobalParams,
     /// used to send messages to the audio thread
     message_sender: Mutex<(
-        Producer<MainThreadMessage>,
-        Consumer<ProcessingThreadMessage>,
+        Producer<ProcessSchedule>,
+        Consumer<ProcessSchedule>,
     )>,
-    /// parameter values of the audio graph, in topological order
+    /// parameter values of the audio graph, in a topological order
     graph: AtomicRefCell<AudioGraph<Arc<dyn NodeParameters>>>,
     /// used to keep track of nodes of the same type
     node_count_per_type: AtomicRefCell<HashMap<TypeId, usize>>,
@@ -102,8 +88,8 @@ pub struct KrynthParams {
 
 impl KrynthParams {
     pub fn new(
-        producer: Producer<MainThreadMessage>,
-        deallocator: Consumer<ProcessingThreadMessage>,
+        producer: Producer<ProcessSchedule>,
+        deallocator: Consumer<ProcessSchedule>,
     ) -> Self {
         Self {
             global_params: GlobalParams::new(),
@@ -126,7 +112,7 @@ impl KrynthParams {
             Window::new(node_index.to_string())
                 .fixed_size((400., 500.))
                 .show(ctx, |ui| {
-                    node_params.ui(node_index, ui, setter);
+                    node_params.ui(ui, setter);
                 });
         }
     }

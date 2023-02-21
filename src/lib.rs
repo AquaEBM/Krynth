@@ -5,9 +5,9 @@ mod params;
 
 use arrayvec::ArrayVec;
 use dsp::*;
-use params::{KrynthParams, MainThreadMessage, ProcessingThreadMessage};
+use params::KrynthParams;
 use rtrb::{Consumer, Producer, RingBuffer};
-use std::{sync::Arc, thread, time::Duration};
+use std::{sync::Arc, thread, time::Duration, mem};
 
 use nih_plug::prelude::*;
 use nih_plug_egui::{
@@ -28,8 +28,8 @@ pub struct Krynth {
     voice_handler: ArrayVec<u8, MAX_POLYPHONY>,
     schedule: ProcessSchedule,
     params: Arc<KrynthParams>,
-    gui_thread_messages: Consumer<MainThreadMessage>,
-    resource_freer: Producer<ProcessingThreadMessage>,
+    gui_thread_messages: Consumer<ProcessSchedule>,
+    resource_freer: Producer<ProcessSchedule>,
 }
 
 impl Default for Krynth {
@@ -67,7 +67,7 @@ impl Plugin for Krynth {
     // Do not expose our plugin's parameters as part of the param map, since plugin APIs
     // do not really support dynamic adding/removing of parameters,
     // this breaks automation and preset saving though
-    // TODO: Is there a way Around this?.
+    // TODO: Allocate A bunch of parameter objects for each node type and use a use one one each.
 
     type BackgroundTask = ();
 
@@ -114,6 +114,7 @@ impl Plugin for Krynth {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
+
         self.schedule = self.params.build_audio_graph();
 
         true
@@ -127,9 +128,10 @@ impl Plugin for Krynth {
     ) -> ProcessStatus {
         let mut next_event = context.next_event();
 
-        while let Ok(MainThreadMessage::BuildAudioGraph(schedule)) = self.gui_thread_messages.pop()
+        #[allow(unused_must_use)]
+        while let Ok(schedule) = self.gui_thread_messages.pop()
         {
-            self.schedule = schedule;
+            self.resource_freer.push(mem::replace(&mut self.schedule, schedule));
         }
 
         for (i, sample) in buffer.iter_samples().enumerate() {
@@ -183,3 +185,9 @@ impl Vst3Plugin for Krynth {
 }
 
 nih_export_vst3!(Krynth);
+
+
+// TODOS: Replace Global with a wavetable file path list contained globally in a OnceLock or lazy_static
+// use f32x2 instead of StereoSample
+// Make processing struct passsing structs into a single object
+// build audio graph GUI
