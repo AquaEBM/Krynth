@@ -1,20 +1,26 @@
-#![feature(core_intrinsics, array_chunks, trait_upcasting)]
+#![feature(array_chunks)]
 
 mod dsp;
 mod params;
 
 use arrayvec::ArrayVec;
-use dsp::{*, wavetable_osc::WTOsc};
-use params::{KrynthParams, AudioGraphEvent};
-use rtrb::{Consumer, RingBuffer};
-use std::{thread, time::Duration, sync::Arc, any::Any};
+use dsp::*;
+use params::{KrynthParams, MainThreadMessage, ProcessingThreadMessage};
+use rtrb::{Consumer, Producer, RingBuffer};
+use std::{sync::Arc, thread, time::Duration};
 
 use nih_plug::prelude::*;
-use nih_plug_egui::{create_egui_editor, egui::{SidePanel, panel::Side}};
+use nih_plug_egui::{
+    create_egui_editor,
+    egui::{panel::Side, SidePanel},
+};
 
-use plugin_util::{dsp::{processor::{Processor, ProcessSchedule}, sample::StereoSample}, util::Permute};
+use plugin_util::dsp::{
+    processor::{ProcessSchedule, Processor},
+    sample::StereoSample,
+};
 
-use crate::params::{NodeParameters, wt_osc::WTOscParams};
+use crate::params::{wt_osc::WTOscParams, NodeParameters};
 
 const MAX_POLYPHONY: usize = 16;
 
@@ -22,44 +28,50 @@ pub struct Krynth {
     voice_handler: ArrayVec<u8, MAX_POLYPHONY>,
     schedule: ProcessSchedule,
     params: Arc<KrynthParams>,
-    gui_thread_messages: Consumer<AudioGraphEvent>,
+    gui_thread_messages: Consumer<MainThreadMessage>,
+    resource_freer: Producer<ProcessingThreadMessage>,
 }
 
 impl Default for Krynth {
     fn default() -> Self {
-
-        let (producer, consumer) = RingBuffer::new(32);
+        let (producer1, consumer1) = RingBuffer::new(128);
+        let (producer2, consumer2) = RingBuffer::new(128);
 
         Self {
             voice_handler: Default::default(),
             schedule: Default::default(),
-            params: Arc::new(KrynthParams::new(producer)),
-            gui_thread_messages: consumer,
+            params: Arc::new(KrynthParams::new(producer1, consumer2)),
+            gui_thread_messages: consumer1,
+            resource_freer: producer2,
         }
     }
 }
 
 impl Plugin for Krynth {
-
     const NAME: &'static str = "Senpaaiiiiii";
     const VENDOR: &'static str = "AquaEBM";
     const URL: &'static str = "lol";
     const EMAIL: &'static str = "AquaEBM@gmail.com";
     const VERSION: &'static str = "0.6.9";
 
-    const DEFAULT_INPUT_CHANNELS: u32 = 0;
-    const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
-    const SAMPLE_ACCURATE_AUTOMATION: bool = true;
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_output_channels: NonZeroU32::new(2),
+        ..AudioIOLayout::const_default()
+    }];
 
+    const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
+
+    const SAMPLE_ACCURATE_AUTOMATION: bool = true;
     type SysExMessage = ();
-    type BackgroundTask = ();
 
     // Do not expose our plugin's parameters as part of the param map, since plugin APIs
-    // do not really support dynamic adding/removing of parameters, this breaks automation and preset saving
+    // do not really support dynamic adding/removing of parameters,
+    // this breaks automation and preset saving though
     // TODO: Is there a way Around this?.
 
-    fn params(&self) -> Arc<dyn Params> {
+    type BackgroundTask = ();
 
+    fn params(&self) -> Arc<dyn Params> {
         #[derive(Params)]
         #[allow(dead_code)]
         struct DummyParams {
@@ -70,36 +82,39 @@ impl Plugin for Krynth {
     }
 
     fn editor(&self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-
         const FPS: f64 = 48.;
 
         let params = self.params.clone();
-        create_egui_editor(params.editor_state.clone(), (), |_, _| {}, move |ctx, setter, _| {
+        create_egui_editor(
+            params.editor_state.clone(),
+            (),
+            |_, _| {},
+            move |ctx, setter, _| {
+                params.ui(ctx, setter);
 
-            params.ui(ctx, setter);
+                SidePanel::new(Side::Left, "banana").show(ctx, |ui| {
+                    ui.add_space(40.);
 
-            SidePanel::new(Side::Left, "banana").show(ctx, |ui| {
+                    if ui.button("new WTOsc").clicked() {
+                        params.insert_top_level_node(Arc::new(WTOscParams::new(
+                            &params.global_params,
+                        )));
+                    }
+                });
 
-                ui.add_space(40.);
-
-                if ui.button("new WTOsc").clicked() {
-                    params.insert_top_level_node(Arc::new(WTOscParams::new(&params.global_params)));
-                }
-            });
-
-            // Gross workaround for vsync not working.
-            thread::sleep(Duration::from_secs_f64((FPS * 2.).recip()));
-        })
+                // Gross workaround for vsync not working.
+                thread::sleep(Duration::from_secs_f64((FPS * 2.).recip()));
+            },
+        )
     }
 
     fn initialize(
         &mut self,
-        _bus_config: &BusConfig,
+        _audio_io_layout: &AudioIOLayout,
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-
-        self.params.build_audio_graph(&mut self.schedule);
+        self.schedule = self.params.build_audio_graph();
 
         true
     }
@@ -109,48 +124,30 @@ impl Plugin for Krynth {
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
-
     ) -> ProcessStatus {
-
         let mut next_event = context.next_event();
 
-        while let Ok(event) = self.gui_thread_messages.pop() {
-            match event {
-
-                // None of these actions are realtime safe for now (allocations, freeing...)
-
-                AudioGraphEvent::Connect(from, to) => self.schedule.edges[from].push(to),
-
-                AudioGraphEvent::Reschedule(mut permutation) => self.schedule.permute(&mut permutation),
-
-                AudioGraphEvent::PushNode(node) => self.schedule.push(node, vec![]),
-
-                AudioGraphEvent::SetWaveTable(index, wavetables) => {
-
-                    let any = self.schedule[index].processor.as_mut() as &mut dyn Any;
-                    let wt_osc: &mut WTOsc = any.downcast_mut().expect("this node is not a WTOsc");
-                    wt_osc.wavetables = wavetables;
-                },
-            }
+        while let Ok(MainThreadMessage::BuildAudioGraph(schedule)) = self.gui_thread_messages.pop()
+        {
+            self.schedule = schedule;
         }
 
         for (i, sample) in buffer.iter_samples().enumerate() {
-
             while let Some(event) = next_event {
-                if event.timing() > i as u32 { break }
+                if event.timing() > i as u32 {
+                    break;
+                }
 
                 match event {
-
                     NoteEvent::NoteOn { note, .. } => {
                         if let Ok(()) = self.voice_handler.try_push(note) {
                             self.schedule.add_voice(
-                                util::midi_note_to_freq(note) / context.transport().sample_rate
+                                util::midi_note_to_freq(note) / context.transport().sample_rate,
                             )
                         };
-                    },
+                    }
 
                     NoteEvent::NoteOff { note, .. } => {
-
                         for (i, &id) in self.voice_handler.iter().enumerate() {
                             if note == id {
                                 self.voice_handler.swap_remove(i);
@@ -158,7 +155,7 @@ impl Plugin for Krynth {
                                 break;
                             }
                         }
-                    },
+                    }
                     _ => (),
                 }
                 next_event = context.next_event();
@@ -181,7 +178,6 @@ impl Plugin for Krynth {
 use Vst3SubCategory::*;
 
 impl Vst3Plugin for Krynth {
-
     const VST3_CLASS_ID: [u8; 16] = *b"bassriddimriddim";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[Instrument, Stereo];
 }

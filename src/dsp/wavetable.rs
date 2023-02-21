@@ -1,22 +1,26 @@
-use std::{ops::Deref, array, path::Path};
-use realfft::num_complex::Complex32;
+use hound::{SampleFormat, WavReader};
 use plugin_util::{dsp::lerp_table, mul};
-use hound::{WavReader, SampleFormat};
+use realfft::num_complex::Complex32;
+use std::{array, ops::Deref, path::Path};
 
 const WAVE_FRAME_LEN: usize = 2048;
 pub const PHASE_RANGE: f32 = WAVE_FRAME_LEN as f32;
 const NUM_WAVETABLES: usize = WAVE_FRAME_LEN.ilog2() as usize + 1;
 pub const FRAMES_PER_WT: usize = 256;
 
-pub type WaveFrame = Box<[f32 ; WAVE_FRAME_LEN + 1]>;
-pub type WaveTable = [WaveFrame ; FRAMES_PER_WT];
+pub type WaveFrame = Box<[f32; WAVE_FRAME_LEN + 1]>;
+pub type WaveTable = [WaveFrame; FRAMES_PER_WT];
 
 pub fn write_wavetable_from_file(path: impl AsRef<Path>, wt: &mut WaveTable) {
     let reader = WavReader::open(path).unwrap();
     let spec = reader.spec();
 
     assert_eq!(spec.channels, 1, "only mono supported");
-    assert_eq!(spec.sample_format, SampleFormat::Float, "Only FP samples supported");
+    assert_eq!(
+        spec.sample_format,
+        SampleFormat::Float,
+        "Only FP samples supported"
+    );
 
     let mut samples = reader.into_samples::<f32>().map(Result::unwrap);
 
@@ -38,33 +42,37 @@ pub fn write_wavetable_from_file(path: impl AsRef<Path>, wt: &mut WaveTable) {
 }
 
 pub fn empty_wavetable() -> WaveTable {
-    array::from_fn(|_| Box::new([0. ; WAVE_FRAME_LEN + 1]))
+    array::from_fn(|_| Box::new([0.; WAVE_FRAME_LEN + 1]))
 }
 
 /// Bandlimited wavetable data structure
 pub struct BandlimitedWaveTables {
-    data: Box<[WaveTable ; NUM_WAVETABLES]>,
+    data: Box<[WaveTable; NUM_WAVETABLES]>,
 }
 
 impl Deref for BandlimitedWaveTables {
-    type Target = [WaveTable ; NUM_WAVETABLES];
+    type Target = [WaveTable; NUM_WAVETABLES];
 
-    fn deref(&self) -> &Self::Target { &self.data }
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
 }
 
 impl Default for BandlimitedWaveTables {
     fn default() -> Self {
-        Self { data: Box::new(array::from_fn(|_| empty_wavetable())) }
+        Self {
+            data: Box::new(array::from_fn(|_| empty_wavetable())),
+        }
     }
 }
 
 impl BandlimitedWaveTables {
-
     pub fn from_wavetable(wt: &WaveTable) -> Self {
-
         let spectra = spectra_from_wavetable(wt);
 
-        Self { data: bandlimited_wavetables(wt.clone(), &spectra) }
+        Self {
+            data: bandlimited_wavetables(wt.clone(), &spectra),
+        }
     }
 
     /// Resample the value at the given `frame` and `phase` `phase_delta` is
@@ -78,8 +86,10 @@ impl BandlimitedWaveTables {
         unsafe {
             // omit bounds checks
             lerp_table(
-                self.get_unchecked(index.min(NUM_WAVETABLES - 1)).get_unchecked(frame).as_slice(),
-                phase
+                self.get_unchecked(index.min(NUM_WAVETABLES - 1))
+                    .get_unchecked(frame)
+                    .as_slice(),
+                phase,
             )
         }
     }
@@ -88,24 +98,20 @@ impl BandlimitedWaveTables {
 /// Computes the frequency spectra of the wavetable. It is the
 /// caller's responsibiliy to pass in non-aliased wavetables.
 pub fn spectra_from_wavetable(wavetable: &WaveTable) -> Box<[Box<[Complex32]>]> {
-
     let mut r2c = realfft::RealFftPlanner::<f32>::new();
     let wt_len = wavetable[0].len() - 1;
     let fft = r2c.plan_fft_forward(wt_len);
 
     let mut scratch = fft.make_scratch_vec().into_boxed_slice();
-    let mut spectra = vec![fft.make_output_vec().into_boxed_slice(); wavetable.len()].into_boxed_slice();
+    let mut spectra =
+        vec![fft.make_output_vec().into_boxed_slice(); wavetable.len()].into_boxed_slice();
     let mut input = fft.make_input_vec().into_boxed_slice();
 
     for (spectrum, window) in spectra.iter_mut().zip(wavetable.iter()) {
-
         input.copy_from_slice(&window[..wt_len] /* all but the last element */);
 
-        fft.process_with_scratch(
-            &mut input,
-            spectrum,
-            &mut scratch
-        ).expect("wrong buffer sizes");
+        fft.process_with_scratch(&mut input, spectrum, &mut scratch)
+            .expect("wrong buffer sizes");
 
         // remove DC
         spectrum[0].re = 0.;
@@ -119,8 +125,7 @@ pub fn spectra_from_wavetable(wavetable: &WaveTable) -> Box<[Box<[Complex32]>]> 
 pub fn bandlimited_wavetables(
     wavetable: WaveTable,
     spectra: &[Box<[Complex32]>],
-) -> Box<[WaveTable ; NUM_WAVETABLES]> {
-
+) -> Box<[WaveTable; NUM_WAVETABLES]> {
     let mut c2r = realfft::RealFftPlanner::<f32>::new();
 
     let wt_len = (spectra[0].len() - 1) * 2;
@@ -129,7 +134,8 @@ pub fn bandlimited_wavetables(
     let mut scratch = fft.make_scratch_vec().into_boxed_slice();
 
     let num_frames = spectra.len();
-    let mut band_lim_spectra = vec![fft.make_input_vec().into_boxed_slice() ; num_frames].into_boxed_slice();
+    let mut band_lim_spectra =
+        vec![fft.make_input_vec().into_boxed_slice(); num_frames].into_boxed_slice();
 
     let mut output = Box::new(array::from_fn(|_| empty_wavetable()));
 
@@ -140,9 +146,7 @@ pub fn bandlimited_wavetables(
     let mut partials = 1;
 
     for terrain in bandlimited_versions[1..].iter_mut() {
-
         for (spectrum, bl_spectrum) in spectra.iter().zip(band_lim_spectra.iter_mut()) {
-
             let bins = partials + 1;
             let (pass_band, stop_band) = bl_spectrum.split_at_mut(bins);
             pass_band.copy_from_slice(&spectrum[..bins]);
@@ -150,10 +154,10 @@ pub fn bandlimited_wavetables(
         }
 
         for (table, in_spectrum) in terrain.iter_mut().zip(band_lim_spectra.iter_mut()) {
-
             let (wrap_around, window) = table.split_last_mut().unwrap();
 
-            fft.process_with_scratch(in_spectrum, window, &mut scratch).unwrap();
+            fft.process_with_scratch(in_spectrum, window, &mut scratch)
+                .unwrap();
 
             let normalize = (window.len() * 2) as f32;
             window.iter_mut().for_each(|sample| *sample /= normalize);

@@ -1,58 +1,64 @@
 use std::ops::Deref;
 
+use crate::{
+    dsp::{
+        wavetable::{write_wavetable_from_file, BandlimitedWaveTables},
+        wavetable_osc::WTOsc,
+    },
+    params::ModulableParamHandle,
+    params::{modulable, WAVETABLE_FOLDER_PATH},
+    NodeParameters,
+};
 use nih_plug_egui::egui::*;
 use plot::*;
 use rtrb::Producer;
-use crate::{
-    params::{modulable, WAVETABLE_FOLDER_PATH},
-    NodeParameters,
-    params::ModulableParamHandle,
-    dsp::{
-        wavetable_osc::WTOsc,
-        wavetable::{write_wavetable_from_file, BandlimitedWaveTables}
-    }
-};
-use plugin_util::{gui::widgets::*, parameter::ParamHandle, dsp::processor::Processor};
-use nih_plug::prelude::ParamSetter;
 
-use std::sync::Arc;
-use nih_plug::{prelude::*, formatters::v2s_f32_rounded};
+use nih_plug::prelude::ParamSetter;
+use plugin_util::{dsp::processor::Processor, gui::widgets::*, parameter::ParamHandle};
+
+use nih_plug::{formatters::v2s_f32_rounded, prelude::*};
 use nih_plug_egui::egui::Response;
-use plugin_util::{*, dsp::sample::StereoSample};
+use plugin_util::{dsp::sample::StereoSample, *};
+use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 
-use crate::wavetable::{FRAMES_PER_WT, WaveTable, empty_wavetable};
+use crate::wavetable::{empty_wavetable, WaveTable, FRAMES_PER_WT};
 
-use super::{GlobalParams, AudioGraphEvent, send};
+use super::{GlobalParams, MainThreadMessage};
 
 #[derive(Params)]
 pub struct WTOscParams {
-    #[id = "level"]         pub level:             ModulableParamHandle<FloatParam>,
-    #[id = "pan"]           pub pan:               ModulableParamHandle<FloatParam>,
-    #[id = "unison"]        pub num_unison_voices: ModulableParamHandle<IntParam>,
-    #[id = "frame"]         pub frame:             ModulableParamHandle<IntParam>,
-    #[id = "det_range"]     pub detune_range:      ModulableParamHandle<FloatParam>,
-    #[id = "detune"]        pub detune:            ModulableParamHandle<FloatParam>,
-    #[persist = "wt_name"]  pub wt_name:           AtomicRefCell<String>,
-                            pub wavetable:         AtomicRefCell<WaveTable>,
-                            pub wt_list:           Arc<[String]>
+    #[id = "level"]
+    pub level: ModulableParamHandle<FloatParam>,
+    #[id = "pan"]
+    pub pan: ModulableParamHandle<FloatParam>,
+    #[id = "unison"]
+    pub num_unison_voices: ModulableParamHandle<IntParam>,
+    #[id = "frame"]
+    pub frame: ModulableParamHandle<IntParam>,
+    #[id = "det_range"]
+    pub detune_range: ModulableParamHandle<FloatParam>,
+    #[id = "detune"]
+    pub detune: ModulableParamHandle<FloatParam>,
+    #[persist = "wt_name"]
+    pub wt_name: AtomicRefCell<String>,
+    pub wavetable: AtomicRefCell<WaveTable>,
+    pub wt_list: Arc<[String]>,
 }
 
 pub struct WTOscModValues {
     pub level: StereoSample,
     pub pan: StereoSample,
-    pub num_unison_voices: [usize ; 2],
-    pub frame: [usize ; 2],
+    pub num_unison_voices: [usize; 2],
+    pub frame: [usize; 2],
     pub detune_range: StereoSample,
     pub detune: StereoSample,
     pub stereo_pos: StereoSample,
 }
 
 impl WTOscParams {
-
     pub fn modulated(&self, voice_idx: usize) -> WTOscModValues {
-
         let [lvl_l, lvl_r] = self.detune.get_value(voice_idx);
         let [pan_l, pan_r] = self.pan.get_value(voice_idx);
 
@@ -75,14 +81,21 @@ impl WTOscParams {
 }
 
 impl NodeParameters for WTOscParams {
-
     fn new(global_params: &GlobalParams) -> Self {
         Self {
             wt_list: global_params.wt_list.clone(),
 
             level: modulable(
-                FloatParam::new("Level", 0.5, FloatRange::Skewed { min: 0., max: 1., factor: 0.5 })
-                    .with_value_to_string(v2s_f32_rounded(3))
+                FloatParam::new(
+                    "Level",
+                    0.5,
+                    FloatRange::Skewed {
+                        min: 0.,
+                        max: 1.,
+                        factor: 0.5,
+                    },
+                )
+                .with_value_to_string(v2s_f32_rounded(3)),
             ),
 
             pan: modulable(
@@ -90,13 +103,20 @@ impl NodeParameters for WTOscParams {
                     .with_value_to_string(v2s_f32_rounded(3)),
             ),
 
-            num_unison_voices: modulable(
-                IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 16 }),
-            ),
+            num_unison_voices: modulable(IntParam::new(
+                "Unison",
+                1,
+                IntRange::Linear { min: 1, max: 16 },
+            )),
 
-            frame: modulable(
-                IntParam::new("Frame", 0, IntRange::Linear  { min: 0, max: FRAMES_PER_WT  as i32 - 1}),
-            ),
+            frame: modulable(IntParam::new(
+                "Frame",
+                0,
+                IntRange::Linear {
+                    min: 0,
+                    max: FRAMES_PER_WT as i32 - 1,
+                },
+            )),
 
             detune_range: modulable(
                 FloatParam::new("Spread", 2., FloatRange::Linear { min: 0., max: 48. })
@@ -114,48 +134,42 @@ impl NodeParameters for WTOscParams {
         }
     }
 
-    fn type_name(&self) -> String { "Oscillator".into() }
-
-    fn processor(self: Arc<Self>) -> Box<dyn Processor> {
-        Box::new(WTOsc::new(self))
+    fn type_name(&self) -> String {
+        "Oscillator".into()
     }
 
-    fn ui(
-        &self,
-        node_index: usize,
-        ui: &mut Ui,
-        setter: &ParamSetter,
-        message_sender: &mut Producer<AudioGraphEvent>,
-    ) -> Response {
+    fn processor(self: Arc<Self>) -> Box<dyn Processor + Send> {
+        let mut wt_osc = Box::new(WTOsc::new(self));
+        let params = wt_osc.params.as_ref();
+        wt_osc.wavetables = BandlimitedWaveTables::from_wavetable(&params.wavetable.borrow());
+        wt_osc
+    }
 
+    fn ui(&self, node_index: usize, ui: &mut Ui, setter: &ParamSetter) -> Response {
         ui.horizontal(|ui| {
-
             ui.vertical(|ui| {
-
                 ui.add(ParamWidget::new(
                     Knob::new().radius(40.),
-                    ParamHandle::from((self.level.deref(), setter))
+                    ParamHandle::from((self.level.deref(), setter)),
                 ));
 
                 ui.horizontal(|ui| {
-
                     ui.add(ParamWidget::<Knob, ParamHandle<_>>::default(
-                        (self.num_unison_voices.deref(), setter).into()
+                        (self.num_unison_voices.deref(), setter).into(),
                     ));
 
                     ui.add(ParamWidget::<Knob, ParamHandle<_>>::default(
-                        (self.pan.deref(), setter).into()
+                        (self.pan.deref(), setter).into(),
                     ));
                 });
 
                 ui.horizontal(|ui| {
-
                     ui.add(ParamWidget::<Knob, ParamHandle<_>>::default(
-                        (self.detune.deref(), setter).into()
+                        (self.detune.deref(), setter).into(),
                     ));
 
                     ui.add(ParamWidget::<Knob, ParamHandle<_>>::default(
-                        (self.detune_range.deref(), setter).into()
+                        (self.detune_range.deref(), setter).into(),
                     ));
                 });
             });
@@ -168,46 +182,41 @@ impl NodeParameters for WTOscParams {
                     .selected_text(current_name_ref.deref())
                     .show_ui(ui, |ui| {
                         for name in self.wt_list.iter() {
-
-                            if ui.selectable_label(name == current_name_ref.as_str(), name).clicked() {
-
+                            if ui
+                                .selectable_label(name == current_name_ref.as_str(), name)
+                                .clicked()
+                            {
                                 let mut wavetable = self.wavetable.borrow_mut();
 
                                 *current_name_ref = name.clone();
                                 write_wavetable_from_file(
                                     format!("{WAVETABLE_FOLDER_PATH}\\{name}.WAV"),
-                                    &mut wavetable
+                                    &mut wavetable,
                                 );
-
-                                send(
-                                    message_sender,
-                                    AudioGraphEvent::SetWaveTable(
-                                        node_index,
-                                        BandlimitedWaveTables::from_wavetable(&wavetable)
-                                    )
-                                )
                             }
                         }
                     });
 
-                ui.horizontal_centered( |ui| {
-
+                ui.horizontal_centered(|ui| {
                     let wavetable = self.wavetable.borrow();
 
                     let points = PlotPoints::from_ys_f32(
-                        wavetable[self.frame.unmodulated_plain_value() as usize].as_slice()
+                        wavetable[self.frame.unmodulated_plain_value() as usize].as_slice(),
                     );
 
-                    plain_plot(ui.id().with("Plot"), 0.0..points.points().len() as f64, -1.0..1.0)
-                        .show(ui, |plot_ui| {
-                            plot_ui.line(Line::new(points).fill(0.))
-                        });
+                    plain_plot(
+                        ui.id().with("Plot"),
+                        0.0..points.points().len() as f64,
+                        -1.0..1.0,
+                    )
+                    .show(ui, |plot_ui| plot_ui.line(Line::new(points).fill(0.)));
 
                     ui.add(ParamWidget::<VSlider, ParamHandle<_>>::default(
-                        (self.frame.deref(), setter).into()
+                        (self.frame.deref(), setter).into(),
                     ));
                 });
             })
-        }).response
+        })
+        .response
     }
 }
