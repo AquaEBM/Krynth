@@ -1,4 +1,4 @@
-#![feature(array_chunks)]
+#![feature(array_chunks, once_cell)]
 
 mod dsp;
 mod params;
@@ -97,9 +97,7 @@ impl Plugin for Krynth {
                     ui.add_space(40.);
 
                     if ui.button("new WTOsc").clicked() {
-                        params.insert_top_level_node(Arc::new(WTOscParams::new(
-                            &params.global_params,
-                        )));
+                        params.insert_top_level_node(Arc::new(WTOscParams::new()));
                     }
                 });
 
@@ -187,6 +185,5 @@ impl Vst3Plugin for Krynth {
 
 nih_export_vst3!(Krynth);
 
-// TODOS: Replace Global with a wavetable file path list contained globally in a OnceLock or lazy_static
 // use f32x2 instead of StereoSample
 // build audio graph GUI

@@ -21,7 +21,6 @@ use rtrb::{Consumer, Producer};
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    fs::read_dir,
     sync::Arc,
 };
 
@@ -37,32 +36,9 @@ pub fn modulable<T: Param>(param: T) -> ModulableParamHandle<T> {
     Modulable::from(param)
 }
 
-pub struct GlobalParams {
-    pub wt_list: Arc<[String]>,
-}
-
-impl GlobalParams {
-    pub fn new() -> Self {
-        Self {
-            wt_list: read_dir(WAVETABLE_FOLDER_PATH)
-                .unwrap()
-                .map(|dir| {
-                    dir.unwrap()
-                        .file_name()
-                        .to_str()
-                        .unwrap()
-                        .trim_end_matches(".WAV")
-                        .into()
-                })
-                .collect::<Vec<_>>()
-                .into(),
-        }
-    }
-}
-
 pub trait NodeParameters: Params + Any {
 
-    fn new(params: &GlobalParams) -> Self
+    fn new() -> Self
     where
         Self: Sized;
 
@@ -84,7 +60,6 @@ pub trait ProcessorFactoryDyn: NodeParameters {
 #[derive(Params)]
 pub struct KrynthParams {
     pub editor_state: Arc<EguiState>,
-    pub global_params: GlobalParams,
     /// used to send messages to the audio thread
     message_sender: Mutex<(Producer<ProcessSchedule>, Consumer<ProcessSchedule>)>,
     /// parameter values of the audio graph, in a topological order
@@ -100,7 +75,6 @@ impl KrynthParams {
     ) -> Self {
 
         Self {
-            global_params: GlobalParams::new(),
             editor_state: EguiState::from_size(1140, 590),
             message_sender: Mutex::new((producer, deallocator)),
             graph: Default::default(),

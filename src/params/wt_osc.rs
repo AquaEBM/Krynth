@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, fs::read_dir, sync::OnceLock};
 
 use crate::{
     dsp::{
@@ -24,7 +24,9 @@ use atomic_refcell::AtomicRefCell;
 
 use crate::wavetable::{empty_wavetable, WaveTable, FRAMES_PER_WT};
 
-use super::{GlobalParams, ProcessorFactory, ProcessorFactoryDyn, ProcessNode};
+use super::{ProcessorFactory, ProcessorFactoryDyn, ProcessNode};
+
+static WT_LIST: OnceLock<Vec<String>> = OnceLock::new();
 
 #[derive(Params)]
 pub struct WTOscParams {
@@ -43,7 +45,6 @@ pub struct WTOscParams {
     #[persist = "wt_name"]
     pub wt_name: AtomicRefCell<String>,
     pub wavetable: AtomicRefCell<WaveTable>,
-    pub wt_list: Arc<[String]>,
 }
 
 pub struct WTOscModValues {
@@ -80,9 +81,8 @@ impl WTOscParams {
 }
 
 impl NodeParameters for WTOscParams {
-    fn new(global_params: &GlobalParams) -> Self {
+    fn new() -> Self {
         Self {
-            wt_list: global_params.wt_list.clone(),
 
             level: modulable(
                 FloatParam::new(
@@ -169,11 +169,26 @@ impl NodeParameters for WTOscParams {
             ui.vertical_centered_justified(|ui| {
                 let mut current_name_ref = self.wt_name.borrow_mut();
 
+                let wt_list = WT_LIST.get_or_init(|| {
+                    read_dir(WAVETABLE_FOLDER_PATH)
+                        .unwrap()
+                        .map(|dir| {
+                            dir.unwrap()
+                                .file_name()
+                                .to_str()
+                                .unwrap()
+                                .trim_end_matches(".WAV")
+                                .into()
+                        })
+                        .collect::<Vec<_>>()
+                        .into()
+                });
+
                 ComboBox::from_id_source(ui.id().with("combobox"))
                     .width(ui.available_width())
                     .selected_text(current_name_ref.deref())
                     .show_ui(ui, |ui| {
-                        for name in self.wt_list.iter() {
+                        for name in wt_list.iter() {
                             if ui
                                 .selectable_label(name == current_name_ref.as_str(), name)
                                 .clicked()
