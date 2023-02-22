@@ -31,6 +31,7 @@ pub const WAVETABLE_FOLDER_PATH: &str =
     "C:\\Users\\etulyon1\\Documents\\Coding\\Krynth\\wavetables";
 
 pub type ModulableParamHandle<T> = Modulable<T, MAX_POLYPHONY>;
+pub type ProcessNode = dyn Processor + Send;
 
 pub fn modulable<T: Param>(param: T) -> ModulableParamHandle<T> {
     Modulable::from(param)
@@ -60,6 +61,7 @@ impl GlobalParams {
 }
 
 pub trait NodeParameters: Params + Any {
+
     fn new(params: &GlobalParams) -> Self
     where
         Self: Sized;
@@ -67,8 +69,16 @@ pub trait NodeParameters: Params + Any {
     fn type_name(&self) -> String;
 
     fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response;
+}
 
-    fn processor(self: Arc<Self>) -> Box<dyn Processor + Send>;
+pub trait ProcessorFactory: NodeParameters {
+    type Processor: Processor;
+
+    fn processor(self: Arc<Self>) -> Self::Processor;
+}
+
+pub trait ProcessorFactoryDyn: NodeParameters {
+    fn processor_dyn(self: Arc<Self>) -> Box<ProcessNode>;
 }
 
 #[derive(Params)]
@@ -76,12 +86,9 @@ pub struct KrynthParams {
     pub editor_state: Arc<EguiState>,
     pub global_params: GlobalParams,
     /// used to send messages to the audio thread
-    message_sender: Mutex<(
-        Producer<ProcessSchedule>,
-        Consumer<ProcessSchedule>,
-    )>,
+    message_sender: Mutex<(Producer<ProcessSchedule>, Consumer<ProcessSchedule>)>,
     /// parameter values of the audio graph, in a topological order
-    graph: AtomicRefCell<AudioGraph<Arc<dyn NodeParameters>>>,
+    graph: AtomicRefCell<AudioGraph<Arc<dyn ProcessorFactoryDyn>>>,
     /// used to keep track of nodes of the same type
     node_count_per_type: AtomicRefCell<HashMap<TypeId, usize>>,
 }
@@ -91,6 +98,7 @@ impl KrynthParams {
         producer: Producer<ProcessSchedule>,
         deallocator: Consumer<ProcessSchedule>,
     ) -> Self {
+
         Self {
             global_params: GlobalParams::new(),
             editor_state: EguiState::from_size(1140, 590),
@@ -117,7 +125,7 @@ impl KrynthParams {
         }
     }
 
-    pub fn insert_top_level_node(&self, node: Arc<dyn NodeParameters>) {
+    pub fn insert_top_level_node(&self, node: Arc<dyn ProcessorFactoryDyn>) {
         let mut map = self.node_count_per_type.borrow_mut();
         let id = node.type_id();
 
@@ -131,7 +139,7 @@ impl KrynthParams {
         let mut schedule = ProcessSchedule::default();
 
         for (node, edges) in graph.iter().zip(graph.edges().iter()) {
-            schedule.push(node.clone().processor(), edges.clone());
+            schedule.push(node.clone().processor_dyn(), edges.clone());
         }
 
         schedule

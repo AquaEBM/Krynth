@@ -8,7 +8,6 @@ use dsp::*;
 use params::KrynthParams;
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::{sync::Arc, thread, time::Duration, mem};
-
 use nih_plug::prelude::*;
 use nih_plug_egui::{
     create_egui_editor,
@@ -54,11 +53,13 @@ impl Plugin for Krynth {
     const EMAIL: &'static str = "AquaEBM@gmail.com";
     const VERSION: &'static str = "0.6.9";
 
-    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
-        main_output_channels: NonZeroU32::new(2),
-        ..AudioIOLayout::const_default()
-    }];
-
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
+        AudioIOLayout {
+            main_output_channels: NonZeroU32::new(2),
+            ..AudioIOLayout::const_default()
+        }
+    ];
+ 
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
@@ -186,8 +187,6 @@ impl Vst3Plugin for Krynth {
 
 nih_export_vst3!(Krynth);
 
-
 // TODOS: Replace Global with a wavetable file path list contained globally in a OnceLock or lazy_static
 // use f32x2 instead of StereoSample
-// Make processing struct passsing structs into a single object
 // build audio graph GUI

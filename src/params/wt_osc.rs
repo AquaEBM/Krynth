@@ -13,7 +13,7 @@ use nih_plug_egui::egui::*;
 use plot::*;
 
 use nih_plug::prelude::ParamSetter;
-use plugin_util::{dsp::processor::Processor, gui::widgets::*, parameter::ParamHandle};
+use plugin_util::{gui::widgets::*, parameter::ParamHandle};
 
 use nih_plug::{formatters::v2s_f32_rounded, prelude::*};
 use nih_plug_egui::egui::Response;
@@ -24,7 +24,7 @@ use atomic_refcell::AtomicRefCell;
 
 use crate::wavetable::{empty_wavetable, WaveTable, FRAMES_PER_WT};
 
-use super::GlobalParams;
+use super::{GlobalParams, ProcessorFactory, ProcessorFactoryDyn, ProcessNode};
 
 #[derive(Params)]
 pub struct WTOscParams {
@@ -137,13 +137,6 @@ impl NodeParameters for WTOscParams {
         "Oscillator".into()
     }
 
-    fn processor(self: Arc<Self>) -> Box<dyn Processor + Send> {
-        let mut wt_osc = Box::new(WTOsc::new(self));
-        let params = wt_osc.params.as_ref();
-        wt_osc.wavetables = BandlimitedWaveTables::from_wavetable(&params.wavetable.borrow());
-        wt_osc
-    }
-
     fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response {
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
@@ -217,5 +210,22 @@ impl NodeParameters for WTOscParams {
             })
         })
         .response
+    }
+}
+
+impl ProcessorFactoryDyn for WTOscParams {
+    fn processor_dyn(self: Arc<Self>) -> Box<ProcessNode> {
+        let mut wt_osc = Box::new(WTOsc::new(self));
+        let params = wt_osc.params.as_ref();
+        wt_osc.wavetables = BandlimitedWaveTables::from_wavetable(&params.wavetable.borrow());
+        wt_osc
+    }
+}
+
+impl ProcessorFactory for WTOscParams {
+    type Processor = WTOsc;
+
+    fn processor(self: Arc<Self>) -> Self::Processor {
+        todo!()
     }
 }
