@@ -1,4 +1,4 @@
-#![feature(array_chunks, once_cell)]
+#![feature(array_chunks, once_cell, portable_simd)]
 
 mod dsp;
 mod params;

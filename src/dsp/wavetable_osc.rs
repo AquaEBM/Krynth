@@ -1,4 +1,4 @@
-use std::{iter, ops::Add, sync::Arc};
+use std::{iter, ops::Add, sync::Arc, simd::Simd};
 
 use crate::{
     params::wt_osc::{WTOscModValues, WTOscParams},
@@ -17,12 +17,12 @@ pub const MAX_UNISON: usize = 16;
 
 /// Describes a wavetable oscillator
 #[derive(Default)]
-struct Oscillator {
-    pub phase: StereoSample,
-    pub phase_delta: StereoSample,
+struct Oscillator<const N: usize> {
+    pub phase: Simd<f32, N>,
+    pub phase_delta: Simd<f32, N>,
 }
 
-impl Oscillator {
+impl<const N: usize> Oscillator<N> {
     fn new(phase: f32) -> Self {
         Self {
             phase: StereoSample::splat(phase),
@@ -50,13 +50,13 @@ impl Oscillator {
 }
 
 #[derive(Default)]
-struct WTOscVoice {
+struct WTOscVoice<const N: usize> {
     base_phase_delta: StereoSample,
     inv_num_steps: f32, // -2. / (self.oscillators.len() - 1)
-    oscillators: ArrayVec<Oscillator, MAX_UNISON>,
+    oscillators: ArrayVec<Oscillator<N>, MAX_UNISON>,
 }
 
-impl WTOscVoice {
+impl<const N: usize> WTOscVoice<N> {
     fn new(base_phase_delta: f32) -> Self {
         Self {
             oscillators: Default::default(),
@@ -145,13 +145,13 @@ impl WTOscVoice {
     }
 }
 
-pub struct WTOsc {
+pub struct WTOsc<const N: usize> {
     pub params: Arc<WTOscParams>,
     pub wavetables: BandlimitedWaveTables,
-    voices: ArrayVec<WTOscVoice, MAX_POLYPHONY>,
+    voices: ArrayVec<WTOscVoice<N>, MAX_POLYPHONY>,
 }
 
-impl WTOsc {
+impl<const N: usize> WTOsc<N> {
     pub fn new(params: Arc<WTOscParams>) -> Self {
         Self {
             wavetables: Default::default(),
@@ -161,7 +161,7 @@ impl WTOsc {
     }
 }
 
-impl Processor for WTOsc {
+impl<const N: usize> Processor for WTOsc<N> {
     fn add_voice(&mut self, norm_freq: f32) {
         let phase_delta = norm_freq * PHASE_RANGE;
         self.voices.push(WTOscVoice::new(phase_delta));

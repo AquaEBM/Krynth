@@ -48,9 +48,9 @@ pub trait NodeParameters: Params + Any {
 }
 
 pub trait ProcessorFactory: NodeParameters {
-    type Processor: Processor;
+    type Processor<const N: usize>: Processor<N>;
 
-    fn processor(self: Arc<Self>) -> Self::Processor;
+    fn processor<const N: usize>(self: Arc<Self>) -> Self::Processor<N>;
 }
 
 pub trait ProcessorFactoryDyn: NodeParameters {

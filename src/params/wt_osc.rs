@@ -238,7 +238,7 @@ impl ProcessorFactoryDyn for WTOscParams {
 }
 
 impl ProcessorFactory for WTOscParams {
-    type Processor = WTOsc;
+    type Processor = WTOsc<N>;
 
     fn processor(self: Arc<Self>) -> Self::Processor {
         todo!()
