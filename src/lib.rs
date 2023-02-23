@@ -185,5 +185,5 @@ impl Vst3Plugin for Krynth {
 
 nih_export_vst3!(Krynth);
 
-// use f32x2 instead of StereoSample
+// find a way to generically use SIMD
 // build audio graph GUI
