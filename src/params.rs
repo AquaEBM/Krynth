@@ -82,33 +82,29 @@ impl NodeParameters for KrynthParams {
     }
 
     fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response {
-        SidePanel::new(Side::Left, "banana")
-            .show_inside(ui, |ui| {
-                ui.add_space(40.);
 
-                if ui.button("new WTOsc").clicked() {
-                    self.insert_top_level_node(Arc::new(WTOscParams::new()));
-                }
-            })
-            .response
-            | CentralPanel::default()
-                .show_inside(ui, |ui| {
-                    let mut audio_thread_messages = self.message_sender.lock();
+        SidePanel::new(Side::Left, "banana").show_inside(ui, |ui| {
+            ui.add_space(40.);
 
-                    #[allow(unused_must_use)]
-                    {
-                        audio_thread_messages.1.pop();
-                    }
+            if ui.button("new WTOsc").clicked() {
+                self.insert_top_level_node(Arc::new(WTOscParams::new()));
+            }
+        }).response | CentralPanel::default().show_inside(ui, |ui| {
+            let mut audio_thread_messages = self.message_sender.lock();
 
-                    for (node_index, node_params) in self.graph.borrow().iter().enumerate() {
-                        Window::new(node_index.to_string())
-                            .fixed_size((400., 500.))
-                            .show(ui.ctx(), |ui| {
-                                node_params.ui(ui, setter);
-                            });
-                    }
-                })
-                .response
+            #[allow(unused_must_use)]
+            {
+                audio_thread_messages.1.pop();
+            }
+
+            for (node_index, node_params) in self.graph.borrow().iter().enumerate() {
+                Window::new(node_index.to_string())
+                    .fixed_size((400., 500.))
+                    .show(ui.ctx(), |ui| {
+                        node_params.ui(ui, setter);
+                    });
+            }
+        }).response
     }
 }
 
