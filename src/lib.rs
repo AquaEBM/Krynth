@@ -7,7 +7,6 @@ use arrayvec::ArrayVec;
 use dsp::*;
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui::CentralPanel};
-use params::KrynthParams;
 use std::{sync::Arc, thread, time::Duration};
 
 use plugin_util::dsp::{
@@ -15,7 +14,7 @@ use plugin_util::dsp::{
     sample::StereoSample,
 };
 
-use crate::params::NodeParameters;
+use crate::params::audio_graph::{NodeParameters, KrynthParams};
 
 const MAX_POLYPHONY: usize = 16;
 

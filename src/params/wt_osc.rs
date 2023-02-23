@@ -24,7 +24,7 @@ use atomic_refcell::AtomicRefCell;
 
 use crate::wavetable::{empty_wavetable, WaveTable, FRAMES_PER_WT};
 
-use super::{ProcessNode, ProcessorFactory, ProcessorFactoryDyn};
+use super::audio_graph::{ProcessNode, ProcessorFactory, ProcessorFactoryDyn};
 
 static WT_LIST: OnceLock<Vec<String>> = OnceLock::new();
 
