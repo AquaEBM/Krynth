@@ -1,4 +1,4 @@
-use std::{ops::Deref, fs::read_dir, sync::OnceLock};
+use std::{fs::read_dir, ops::Deref, sync::OnceLock};
 
 use crate::{
     dsp::{
@@ -24,7 +24,7 @@ use atomic_refcell::AtomicRefCell;
 
 use crate::wavetable::{empty_wavetable, WaveTable, FRAMES_PER_WT};
 
-use super::{ProcessorFactory, ProcessorFactoryDyn, ProcessNode};
+use super::{ProcessNode, ProcessorFactory, ProcessorFactoryDyn};
 
 static WT_LIST: OnceLock<Vec<String>> = OnceLock::new();
 
@@ -83,7 +83,6 @@ impl WTOscParams {
 impl NodeParameters for WTOscParams {
     fn new() -> Self {
         Self {
-
             level: modulable(
                 FloatParam::new(
                     "Level",

@@ -13,7 +13,7 @@ use plugin_util::{
 
 use nih_plug::prelude::*;
 use nih_plug_egui::{
-    egui::{Context, Response, Ui, Window},
+    egui::{panel::Side, CentralPanel, Response, SidePanel, Ui, Window},
     EguiState,
 };
 
@@ -26,6 +26,8 @@ use std::{
 
 use crate::MAX_POLYPHONY;
 
+use self::wt_osc::WTOscParams;
+
 pub const WAVETABLE_FOLDER_PATH: &str =
     "C:\\Users\\etulyon1\\Documents\\Coding\\Krynth\\wavetables";
 
@@ -37,7 +39,6 @@ pub fn modulable<T: Param>(param: T) -> ModulableParamHandle<T> {
 }
 
 pub trait NodeParameters: Params + Any {
-
     fn new() -> Self
     where
         Self: Sized;
@@ -68,34 +69,59 @@ pub struct KrynthParams {
     node_count_per_type: AtomicRefCell<HashMap<TypeId, usize>>,
 }
 
+impl NodeParameters for KrynthParams {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn type_name(&self) -> String {
+        "Synth".into()
+    }
+
+    fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response {
+        SidePanel::new(Side::Left, "banana")
+            .show_inside(ui, |ui| {
+                ui.add_space(40.);
+
+                if ui.button("new WTOsc").clicked() {
+                    self.insert_top_level_node(Arc::new(WTOscParams::new()));
+                }
+            })
+            .response
+            | CentralPanel::default()
+                .show_inside(ui, |ui| {
+                    let mut audio_thread_messages = self.message_sender.lock();
+
+                    #[allow(unused_must_use)]
+                    {
+                        audio_thread_messages.1.pop();
+                    }
+
+                    for (node_index, node_params) in self.graph.borrow().iter().enumerate() {
+                        Window::new(node_index.to_string())
+                            .fixed_size((400., 500.))
+                            .show(ui.ctx(), |ui| {
+                                node_params.ui(ui, setter);
+                            });
+                    }
+                })
+                .response
+    }
+}
+
 impl KrynthParams {
     pub fn new(
         producer: Producer<ProcessSchedule>,
         deallocator: Consumer<ProcessSchedule>,
     ) -> Self {
-
         Self {
             editor_state: EguiState::from_size(1140, 590),
             message_sender: Mutex::new((producer, deallocator)),
             graph: Default::default(),
             node_count_per_type: Default::default(),
-        }
-    }
-
-    pub fn ui(&self, ctx: &Context, setter: &ParamSetter) {
-        let mut audio_thread_messages = self.message_sender.lock();
-
-        #[allow(unused_must_use)]
-        {
-            audio_thread_messages.1.pop();
-        }
-
-        for (node_index, node_params) in self.graph.borrow().iter().enumerate() {
-            Window::new(node_index.to_string())
-                .fixed_size((400., 500.))
-                .show(ctx, |ui| {
-                    node_params.ui(ui, setter);
-                });
         }
     }
 

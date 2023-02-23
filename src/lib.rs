@@ -5,21 +5,18 @@ mod params;
 
 use arrayvec::ArrayVec;
 use dsp::*;
+use nih_plug::prelude::*;
+use nih_plug_egui::{create_egui_editor, egui::CentralPanel};
 use params::KrynthParams;
 use rtrb::{Consumer, Producer, RingBuffer};
-use std::{sync::Arc, thread, time::Duration, mem};
-use nih_plug::prelude::*;
-use nih_plug_egui::{
-    create_egui_editor,
-    egui::{panel::Side, SidePanel},
-};
+use std::{mem, sync::Arc, thread, time::Duration};
 
 use plugin_util::dsp::{
     processor::{ProcessSchedule, Processor},
     sample::StereoSample,
 };
 
-use crate::params::{wt_osc::WTOscParams, NodeParameters};
+use crate::params::NodeParameters;
 
 const MAX_POLYPHONY: usize = 16;
 
@@ -53,13 +50,11 @@ impl Plugin for Krynth {
     const EMAIL: &'static str = "AquaEBM@gmail.com";
     const VERSION: &'static str = "0.6.9";
 
-    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
-        AudioIOLayout {
-            main_output_channels: NonZeroU32::new(2),
-            ..AudioIOLayout::const_default()
-        }
-    ];
- 
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_output_channels: NonZeroU32::new(2),
+        ..AudioIOLayout::const_default()
+    }];
+
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
@@ -91,14 +86,8 @@ impl Plugin for Krynth {
             (),
             |_, _| {},
             move |ctx, setter, _| {
-                params.ui(ctx, setter);
-
-                SidePanel::new(Side::Left, "banana").show(ctx, |ui| {
-                    ui.add_space(40.);
-
-                    if ui.button("new WTOsc").clicked() {
-                        params.insert_top_level_node(Arc::new(WTOscParams::new()));
-                    }
+                CentralPanel::default().show(ctx, |ui| {
+                    params.ui(ui, setter);
                 });
 
                 // Gross workaround for vsync not working.
@@ -113,7 +102,6 @@ impl Plugin for Krynth {
         _buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-
         self.schedule = self.params.build_audio_graph();
 
         true
@@ -128,9 +116,9 @@ impl Plugin for Krynth {
         let mut next_event = context.next_event();
 
         #[allow(unused_must_use)]
-        while let Ok(schedule) = self.gui_thread_messages.pop()
-        {
-            self.resource_freer.push(mem::replace(&mut self.schedule, schedule));
+        while let Ok(schedule) = self.gui_thread_messages.pop() {
+            self.resource_freer
+                .push(mem::replace(&mut self.schedule, schedule));
         }
 
         for (i, sample) in buffer.iter_samples().enumerate() {
