@@ -8,8 +8,7 @@ use dsp::*;
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui::CentralPanel};
 use params::KrynthParams;
-use rtrb::{Consumer, Producer, RingBuffer};
-use std::{mem, sync::Arc, thread, time::Duration};
+use std::{sync::Arc, thread, time::Duration};
 
 use plugin_util::dsp::{
     processor::{ProcessSchedule, Processor},
@@ -24,21 +23,15 @@ pub struct Krynth {
     voice_handler: ArrayVec<u8, MAX_POLYPHONY>,
     schedule: ProcessSchedule,
     params: Arc<KrynthParams>,
-    gui_thread_messages: Consumer<ProcessSchedule>,
-    resource_freer: Producer<ProcessSchedule>,
 }
 
 impl Default for Krynth {
     fn default() -> Self {
-        let (producer1, consumer1) = RingBuffer::new(128);
-        let (producer2, consumer2) = RingBuffer::new(128);
 
         Self {
             voice_handler: Default::default(),
             schedule: Default::default(),
-            params: Arc::new(KrynthParams::new(producer1, consumer2)),
-            gui_thread_messages: consumer1,
-            resource_freer: producer2,
+            params: Arc::new(KrynthParams::new()),
         }
     }
 }
@@ -114,12 +107,6 @@ impl Plugin for Krynth {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let mut next_event = context.next_event();
-
-        #[allow(unused_must_use)]
-        while let Ok(schedule) = self.gui_thread_messages.pop() {
-            self.resource_freer
-                .push(mem::replace(&mut self.schedule, schedule));
-        }
 
         for (i, sample) in buffer.iter_samples().enumerate() {
             while let Some(event) = next_event {
