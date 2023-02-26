@@ -2,8 +2,9 @@ use atomic_refcell::AtomicRefCell;
 use nih_plug::{formatters::*, prelude::*};
 use nih_plug_egui::{egui::*, EguiState};
 use parking_lot::Mutex;
+use arrayvec::ArrayVec;
 use plugin_util::{
-    dsp::processor::Processor,
+    dsp::sample::*,
     gui::widgets::*,
     parameter::{Modulable, ParamHandle},
 };
@@ -11,6 +12,15 @@ use rtrb::{Consumer, Producer};
 use std::sync::Arc;
 
 use std::any::Any;
+
+pub trait Processor: Any {
+
+    fn add_voice(&mut self, norm_freq: f32);
+
+    fn remove_voice(&mut self, voice_idx: usize);
+
+    fn process(&mut self, inputs: &mut [StereoSample]);
+}
 
 type ProcessNode = dyn Processor + Send;
 

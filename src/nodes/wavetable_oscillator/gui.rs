@@ -52,13 +52,11 @@ impl KrynthNode for WTOscParams {
                         .map(|dir| {
                             dir.unwrap()
                                 .file_name()
-                                .to_str()
-                                .unwrap()
+                                .to_string_lossy()
                                 .trim_end_matches(".WAV")
                                 .into()
                         })
                         .collect::<Vec<_>>()
-                        .into()
                 });
 
                 ComboBox::from_id_source(ui.id().with("combobox"))

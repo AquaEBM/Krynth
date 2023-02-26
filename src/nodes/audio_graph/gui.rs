@@ -1,4 +1,4 @@
-use plugin_util::dsp::processor::ProcessSchedule;
+use super::ProcessSchedule;
 
 use super::{wavetable_oscillator::WTOscParams, *};
 

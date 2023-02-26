@@ -1,9 +1,10 @@
 mod dsp;
 mod gui;
 
+use dsp::ProcessSchedule;
 use super::*;
 
-use plugin_util::dsp::{graph::AudioGraph, processor::ProcessSchedule};
+use plugin_util::dsp::graph::AudioGraph;
 use std::{any::TypeId, collections::HashMap};
 
 #[derive(Params)]

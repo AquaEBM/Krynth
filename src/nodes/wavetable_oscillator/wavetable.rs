@@ -57,7 +57,7 @@ impl BandlimitedWaveTables {
         let spectra = spectra_from_wavetable(wt);
 
         Self {
-            data: bandlimited_wavetables(wt.clone(), spectra.as_slice().try_into().unwrap()),
+            data: bandlimited_wavetables(*wt, spectra.as_slice().try_into().unwrap()),
         }
     }
 
@@ -85,18 +85,18 @@ impl BandlimitedWaveTables {
 /// caller's responsibiliy to pass in non-aliased wavetables.
 pub fn spectra_from_wavetable(wavetable: &WaveTable) -> Vec<Spectrum> {
     let mut r2c = realfft::RealFftPlanner::<f32>::new();
-    let wt_len = wavetable[0].len() - 1;
-    let fft = r2c.plan_fft_forward(wt_len);
+    let fft = r2c.plan_fft_forward(WAVE_FRAME_LEN);
 
     let mut scratch = fft.make_scratch_vec();
 
     let mut spectra = Vec::<Spectrum>::with_capacity(FRAMES_PER_WT);
+    #[allow(clippy::uninit_vec)]
     unsafe { spectra.set_len(FRAMES_PER_WT) };
 
-    let mut input = fft.make_input_vec();
+    let mut input = [0. ; WAVE_FRAME_LEN];
 
     for (spectrum, window) in spectra.iter_mut().zip(wavetable.iter()) {
-        input.copy_from_slice(&window[..wt_len] /* all but the last element */);
+        input.copy_from_slice(&window[..WAVE_FRAME_LEN] /* all but the last element */);
 
         fft.process_with_scratch(&mut input, spectrum, &mut scratch)
             .expect("wrong buffer sizes");
