@@ -1,19 +1,48 @@
-use std::{iter, ops::Add, sync::Arc};
-
-use crate::{
-    params::wt_osc::{WTOscModValues, WTOscParams},
+use super::{
     wavetable::{BandlimitedWaveTables, PHASE_RANGE},
-    MAX_POLYPHONY,
+    WTOscParams, *,
 };
+
+use std::{iter, ops::Add};
 
 use arrayvec::ArrayVec;
-use plugin_util::dsp::{
-    processor::Processor,
-    sample::{StereoSample, ZERO_SAMPLE},
-};
+use plugin_util::dsp::sample::{StereoSample, ZERO_SAMPLE};
 use rand::random;
 
-pub const MAX_UNISON: usize = 16;
+const MAX_UNISON: usize = 16;
+
+struct WTOscModValues {
+    level: StereoSample,
+    pan: StereoSample,
+    num_unison_voices: [usize; 2],
+    frame: [usize; 2],
+    detune_range: StereoSample,
+    detune: StereoSample,
+    stereo_pos: StereoSample,
+}
+
+impl WTOscParams {
+    fn modulated(&self, voice_idx: usize) -> WTOscModValues {
+        let [lvl_l, lvl_r] = self.detune.get_value(voice_idx);
+        let [pan_l, pan_r] = self.pan.get_value(voice_idx);
+
+        let stereo_pos = [1. - lvl_l, lvl_r].into();
+        let pan = [1. - pan_l, pan_r].into();
+
+        let [frame_l, frame_r] = self.frame.get_value(voice_idx);
+        let [unison_l, unison_r] = self.num_unison_voices.get_value(voice_idx);
+
+        WTOscModValues {
+            level: self.level.get_value(voice_idx).into(),
+            pan,
+            num_unison_voices: [unison_l as usize, unison_r as usize],
+            frame: [frame_l as usize, frame_r as usize],
+            detune_range: self.detune_range.get_value(voice_idx).into(),
+            detune: self.detune.get_value(voice_idx).into(),
+            stereo_pos,
+        }
+    }
+}
 
 /// Describes a wavetable oscillator
 #[derive(Default)]
@@ -146,13 +175,13 @@ impl WTOscVoice {
 }
 
 pub struct WTOsc {
-    pub params: Arc<WTOscParams>,
-    pub wavetables: BandlimitedWaveTables,
+    params: Arc<WTOscParams>,
+    wavetables: BandlimitedWaveTables,
     voices: ArrayVec<WTOscVoice, MAX_POLYPHONY>,
 }
 
 impl WTOsc {
-    pub fn new(params: Arc<WTOscParams>) -> Self {
+    pub(super) fn new(params: Arc<WTOscParams>) -> Self {
         Self {
             wavetables: Default::default(),
             params,

@@ -1,6 +1,6 @@
 [build]
 
-rustflags = ["-Ctarget-cpu=native", "-Cllvm-args=--ffast-math"]
+rustflags = "-Ctarget-cpu=native"
 
 [profile.release]
 
