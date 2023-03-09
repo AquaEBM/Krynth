@@ -9,9 +9,9 @@ static WT_LIST: OnceLock<Vec<String>> = OnceLock::new();
 const WAVETABLE_FOLDER_PATH: &str =
     "C:\\Users\\etulyon1\\Documents\\Coding\\Krynth\\wavetables";
 
-impl KrynthNode for WTOscParams {
-    fn type_name(&self) -> String {
-        "Oscillator".into()
+impl SeenthNode for WTOscParams {
+    fn type_name(&self) -> &'static str {
+        "Oscillator"
     }
 
     fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response {
@@ -106,13 +106,5 @@ impl KrynthNode for WTOscParams {
 
     fn processor_node(self: Arc<Self>) -> Box<ProcessNode> {
         Box::new(self.oscillator())
-    }
-}
-
-impl KrynthStandAlonePlugin for WTOscParams {
-    type Processor = WTOsc;
-
-    fn processor(self: Arc<Self>) -> Self::Processor {
-        self.oscillator()
     }
 }

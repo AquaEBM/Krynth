@@ -24,7 +24,7 @@ impl Processor for ProcessSchedule {
         }
     }
 
-    fn process(&mut self, inputs: &mut [StereoSample]) {
+    fn process(&mut self, _voice_idx: usize, _inputs: &mut StereoSample) {
 
         // C++ like index iteration is required here in order to work around Rust's borrowing
         // rules because indexing, as opposed to, say, iter_mut() doesn't hold a long borrow
@@ -35,7 +35,7 @@ impl Processor for ProcessSchedule {
 
             if  self.edges[i].is_empty() {
 
-                self.nodes[i].output_to_buffer(inputs);
+                // self.nodes[i].output_to_buffer(inputs);
             }
 
             for &j in &self.edges[i] {
@@ -49,17 +49,26 @@ impl Processor for ProcessSchedule {
             }
         }
     }
+
+    fn initialize(&mut self) -> (bool, u32) {
+        self.nodes.iter_mut().map(|node| node.processor.initialize());
+        (true, 0)
+    }
+
+    fn reset(&mut self) {
+        self.nodes.iter_mut().for_each(|node| node.processor.reset());
+    }
 }
 
 impl ProcessSchedule {
-    pub fn push(&mut self, processor: Box<dyn Processor + Send>, successors: Vec<usize>) {
+    pub(super) fn push(&mut self, processor: Box<dyn Processor + Send>, successors: Vec<usize>) {
         self.nodes.push(processor.into());
         self.edges.push(successors);
     }
 }
 
 pub struct ProcessComponent {
-    pub processor: Box<dyn Processor + Send>,
+    processor: Box<dyn Processor + Send>,
     sample_buffer: ArrayVec<StereoSample, 16>,
 }
 
@@ -75,7 +84,9 @@ impl From<Box<dyn Processor + Send>> for ProcessComponent {
 impl ProcessComponent {
 
     pub fn process(&mut self) {
-        self.processor.process(&mut self.sample_buffer);
+        // for sample in self.sample_buffer.iter_mut() {
+        //     self.processor.process(sample);
+        // }   
     }
 
     pub fn output_to_buffer(&mut self, inputs: &mut [StereoSample]) {
@@ -86,10 +97,14 @@ impl ProcessComponent {
     }
 }
 
-impl KrynthStandAlonePlugin for KrynthParams {
+impl SeenthStandAlonePlugin for SeenthParams {
     type Processor = ProcessSchedule;
 
     fn processor(self: Arc<Self>) -> Self::Processor {
         self.schedule()
+    }
+
+    fn editor_state(&self) -> Arc<EguiState> {
+        self.editor_state.clone()
     }
 }

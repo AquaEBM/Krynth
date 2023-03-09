@@ -202,10 +202,40 @@ impl Processor for WTOsc {
 
     #[inline]
     /// pre-condition: inputs.len() = number of voices in self
-    fn process(&mut self, inputs: &mut [StereoSample]) {
+    fn process(&mut self, voice_idx: usize, input: &mut StereoSample) {
         let params = self.params.as_ref();
-        for (i, (input, voice)) in inputs.iter_mut().zip(self.voices.iter_mut()).enumerate() {
-            *input = voice.process(params.modulated(i), &self.wavetables);
-        }
+
+        *input = self.voices[voice_idx].process(
+            params.modulated(voice_idx),
+            &self.wavetables
+        );
+    }
+
+    fn initialize(&mut self) -> (bool, u32) {
+        self.wavetables.set_wavetable(
+            self.params.wavetable.borrow().as_slice().try_into().unwrap()
+        );
+        (true, 0)
+    }
+
+    fn reset(&mut self) {
+        self.voices.clear()
+    }
+}
+
+impl SeenthStandAlonePlugin for WTOscParams {
+    type Processor = WTOsc;
+    
+    const PORTS: AudioIOLayout = AudioIOLayout {
+        main_output_channels: NonZeroU32::new(2),
+        ..AudioIOLayout::const_default()
+    };
+
+    fn processor(self: Arc<Self>) -> Self::Processor {
+        self.oscillator()
+    }
+
+    fn editor_state(&self) -> Arc<EguiState> {
+        EguiState::from_size(1000, 200)
     }
 }

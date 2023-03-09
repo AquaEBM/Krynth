@@ -8,14 +8,14 @@ use plugin_util::dsp::graph::AudioGraph;
 use std::{any::TypeId, collections::HashMap};
 
 #[derive(Params)]
-pub(crate) struct KrynthParams {
+pub(crate) struct SeenthParams {
     editor_state: Arc<EguiState>,
     message_sender: Option<Mutex<(Producer<ProcessSchedule>, Consumer<ProcessSchedule>)>>,
-    graph: AtomicRefCell<AudioGraph<Arc<dyn KrynthNode>>>,
+    graph: AtomicRefCell<AudioGraph<Arc<dyn SeenthNode>>>,
     node_count_per_type: AtomicRefCell<HashMap<TypeId, usize>>,
 }
 
-impl Default for KrynthParams {
+impl Default for SeenthParams {
     fn default() -> Self {
         Self {
             editor_state: EguiState::from_size(1140, 560),
@@ -26,7 +26,7 @@ impl Default for KrynthParams {
     }
 }
 
-impl KrynthParams {
+impl SeenthParams {
     fn schedule(self: Arc<Self>) -> ProcessSchedule {
         ProcessSchedule::default()
     }

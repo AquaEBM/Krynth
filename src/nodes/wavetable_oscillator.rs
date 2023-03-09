@@ -9,7 +9,7 @@ const FRAMES_PER_WT: usize = 256;
 const WAVE_FRAME_LEN: usize = 2048;
 
 type WaveFrame = [f32; WAVE_FRAME_LEN + 1];
-type WaveTable = [WaveFrame; FRAMES_PER_WT];
+type WaveTable = [WaveFrame ; FRAMES_PER_WT];
 
 #[derive(Params)]
 pub(crate) struct WTOscParams {

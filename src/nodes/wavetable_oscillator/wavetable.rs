@@ -48,17 +48,16 @@ pub(super) fn write_wavetable_from_file(path: impl AsRef<Path>, wt: &mut WaveTab
 
 /// Bandlimited wavetable data structure
 #[derive(Default)]
-pub(crate) struct BandlimitedWaveTables {
-    data: Vec<WaveTable>,
+pub(super) struct BandlimitedWaveTables {
+    data: Option<Box<[WaveTable ; NUM_WAVETABLES]>>,
 }
 
 impl BandlimitedWaveTables {
-    pub fn from_wavetable(wt: &WaveTable) -> Self {
+    pub fn set_wavetable(&mut self, wt: &WaveTable) {
+
         let spectra = spectra_from_wavetable(wt);
 
-        Self {
-            data: bandlimited_wavetables(*wt, spectra.as_slice().try_into().unwrap()),
-        }
+        self.data.replace(bandlimited_wavetables(*wt, spectra.as_ref()));
     }
 
     /// Resample the value at the given `frame` and `phase` `phase_delta` is
@@ -66,12 +65,15 @@ impl BandlimitedWaveTables {
     /// which bandlimited copy of the wavetable to resample from, reducing aliasing.
     #[inline]
     pub fn get_sample(&self, phase: f32, frame: usize, phase_delta: f32) -> f32 {
-        let index = 126usize.saturating_sub((phase_delta / PHASE_RANGE).to_bits() as usize >> 23);
+        let index = 126usize.saturating_sub(
+            (phase_delta / PHASE_RANGE)
+                .to_bits() as usize >> 23
+        );
 
         unsafe {
             // omit bounds checks
             lerp_table(
-                self.data
+                self.data.as_ref().unwrap_unchecked()
                     .get_unchecked(index.min(NUM_WAVETABLES - 1))
                     .get_unchecked(frame)
                     .as_slice(),
@@ -83,7 +85,7 @@ impl BandlimitedWaveTables {
 
 /// Computes the frequency spectra of the wavetable. It is the
 /// caller's responsibiliy to pass in non-aliased wavetables.
-pub fn spectra_from_wavetable(wavetable: &WaveTable) -> Vec<Spectrum> {
+pub fn spectra_from_wavetable(wavetable: &WaveTable) -> Box<[Spectrum ; FRAMES_PER_WT]> {
     let mut r2c = realfft::RealFftPlanner::<f32>::new();
     let fft = r2c.plan_fft_forward(WAVE_FRAME_LEN);
 
@@ -104,16 +106,17 @@ pub fn spectra_from_wavetable(wavetable: &WaveTable) -> Vec<Spectrum> {
         // remove DC
         spectrum[0].re = 0.;
     }
-    spectra
+    spectra.try_into().unwrap()
 }
 
 /// Computes bandlimited copies of the wavetable with the given
-/// frequecncy spectra. The first will be DC. The second will have one harmonic,
-/// the third 2, the forth 4, the fifth 8, etc...
+/// frequecncy spectra. The first will be DC. The second will have one
+/// harmonic, the third 2, the forth 4, the fifth 8, etc...
 pub fn bandlimited_wavetables(
     wavetable: WaveTable,
     spectra: &[Spectrum; FRAMES_PER_WT],
-) -> Vec<WaveTable> {
+) -> Box<[WaveTable ; NUM_WAVETABLES]> {
+
     let mut output = Vec::with_capacity(NUM_WAVETABLES);
     output.push(empty_wavetable());
     unsafe { output.set_len(NUM_WAVETABLES) };
@@ -147,5 +150,5 @@ pub fn bandlimited_wavetables(
         }
         partials *= 2;
     }
-    output
+    output.try_into().unwrap()
 }
