@@ -1,7 +1,6 @@
 #![feature(array_chunks, once_cell, portable_simd)]
 
 mod nodes;
-
 use arrayvec::ArrayVec;
 use nodes::*;
 
@@ -36,7 +35,11 @@ impl<T: SeenthStandAlonePlugin, const VOICES: usize> Plugin for SeenthPlugin<T, 
     const VERSION: &'static str = "0.6.9";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
-        T::PORTS
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(2),
+            main_output_channels: NonZeroU32::new(2),
+            ..AudioIOLayout::const_default()
+        }
     ];
 
     const MIDI_INPUT: MidiConfig = MidiConfig::MidiCCs;
@@ -51,17 +54,22 @@ impl<T: SeenthStandAlonePlugin, const VOICES: usize> Plugin for SeenthPlugin<T, 
     fn params(&self) -> Arc<dyn Params> { self.params.clone() }
 
     fn editor(&self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        None
+        let params = self.params.clone();
+        create_egui_editor(params.editor_state(), (), |_, _| (), move |ctx, setter, _| {
+            CentralPanel::default().show(ctx, |ui| {
+                params.ui(ui, setter);
+            });
+        })
     }
 
     fn initialize(
         &mut self,
         _audio_io_layout: &AudioIOLayout,
-        _buffer_config: &BufferConfig,
+        buffer_config: &BufferConfig,
         context: &mut impl InitContext<Self>,
     ) -> bool {
 
-        let (success, latency) = self.processor.initialize();
+        let (success, latency) = self.processor.initialize(buffer_config.sample_rate);
         context.set_latency_samples(latency);
         success
     }
@@ -79,7 +87,7 @@ impl<T: SeenthStandAlonePlugin, const VOICES: usize> Plugin for SeenthPlugin<T, 
     ) -> ProcessStatus {
         let mut next_event = context.next_event();
 
-        for (i, _sample) in buffer.iter_samples().enumerate() {
+        for (i, mut input_frame) in buffer.iter_samples().enumerate() {
             while let Some(event) = next_event {
 
                 if event.timing() > i as u32 { break; }
@@ -111,10 +119,38 @@ impl<T: SeenthStandAlonePlugin, const VOICES: usize> Plugin for SeenthPlugin<T, 
                 }
                 next_event = context.next_event();
             }
+
+            let input_frame_simd = unsafe { input_frame.to_simd_unchecked() };
+
+            input_frame.from_simd(
+                (0..self.voice_handler.len()).map( |i|
+                    self.processor.process(input_frame_simd, i, false)
+                ).sum()
+            );
         }
         ProcessStatus::Normal
     }
 }
+
+impl<T: SeenthStandAlonePlugin, const N: usize> Vst3Plugin for SeenthPlugin<T, N> {
+    const VST3_CLASS_ID: [u8; 16] = *b"0123456789012345";
+
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[];
+}
+
+impl<T: SeenthStandAlonePlugin, const N: usize> ClapPlugin for SeenthPlugin<T, N> {
+    const CLAP_ID: &'static str = "lol";
+
+    const CLAP_DESCRIPTION: Option<&'static str> = None;
+
+    const CLAP_MANUAL_URL: Option<&'static str> = None;
+
+    const CLAP_SUPPORT_URL: Option<&'static str> = None;
+
+    const CLAP_FEATURES: &'static [ClapFeature] = &[];    
+}
+
+nih_export_vst3!(SeenthPlugin<wavetable_oscillator::WTOscParams>);
 
 // find a way to use SIMD generically over vector size
 // build audio graph GUI

@@ -1,7 +1,7 @@
 use hound::{SampleFormat, WavReader};
 use plugin_util::dsp::lerp_table;
 use realfft::num_complex::Complex32;
-use std::path::Path;
+use std::{path::Path, simd::{usizex2, SimdUint}};
 
 use super::*;
 
@@ -64,21 +64,34 @@ impl BandlimitedWaveTables {
     /// the magnitude of the last phase increment of the oscillator and is used to determine
     /// which bandlimited copy of the wavetable to resample from, reducing aliasing.
     #[inline]
-    pub fn get_sample(&self, phase: f32, frame: usize, phase_delta: f32) -> f32 {
-        let index = 126usize.saturating_sub(
-            (phase_delta / PHASE_RANGE)
-                .to_bits() as usize >> 23
-        );
+    pub fn get_sample(&self, phase: f32x2, frame: usizex2, mut phase_delta: f32x2) -> f32x2 {
+
+        phase_delta *= f32x2::splat(1. / PHASE_RANGE);
+        let array = phase_delta.as_array();
+
+        let index = usizex2::splat(126).saturating_sub(
+                usizex2::from_array([array[0].to_bits() as usize, array[1].to_bits() as usize])
+        ) >> usizex2::splat(23);
 
         unsafe {
+            // TODO: SIMD this later
             // omit bounds checks
-            lerp_table(
-                self.data.as_ref().unwrap_unchecked()
-                    .get_unchecked(index.min(NUM_WAVETABLES - 1))
-                    .get_unchecked(frame)
-                    .as_slice(),
-                phase,
-            )
+            f32x2::from_array([
+                lerp_table(
+                    self.data.as_ref().unwrap_unchecked()
+                        .get_unchecked(index.as_array()[0].min(NUM_WAVETABLES - 1))
+                        .get_unchecked(frame.as_array()[0])
+                        .as_slice(),
+                    phase.as_array()[0],
+                ),
+                lerp_table(
+                    self.data.as_ref().unwrap_unchecked()
+                        .get_unchecked(index.as_array()[1].min(NUM_WAVETABLES - 1))
+                        .get_unchecked(frame.as_array()[1])
+                        .as_slice(),
+                    phase.as_array()[1],
+                )
+            ])
         }
     }
 }
@@ -119,6 +132,7 @@ pub fn bandlimited_wavetables(
 
     let mut output = Vec::with_capacity(NUM_WAVETABLES);
     output.push(empty_wavetable());
+    // SAFETY: len == capacity & elements will be initialized before this function returns
     unsafe { output.set_len(NUM_WAVETABLES) };
 
     let (full_wt, bandlimited_versions) = output.split_last_mut().unwrap();

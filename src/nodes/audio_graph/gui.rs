@@ -19,7 +19,10 @@ impl SeenthParams {
         let mut schedule = ProcessSchedule::default();
 
         for (node, edges) in graph.iter().zip(graph.edges().iter()) {
-            schedule.push(node.clone().processor_node(), edges.clone());
+            schedule.push(
+                node.clone().processor_node(),
+                edges.clone(),
+            );
         }
 
         schedule
@@ -47,6 +50,8 @@ impl SeenthNode for SeenthParams {
 
             #[allow(unused_must_use)]
             {
+                // free whatever resource the audio
+                // thread asks us to deallocate
                 audio_thread_messages.1.pop();
             }
 

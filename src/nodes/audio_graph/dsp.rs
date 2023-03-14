@@ -1,99 +1,68 @@
 use super::*;
+use std::simd::f32x2;
 
 #[derive(Default)]
 pub struct ProcessSchedule { 
-    nodes: Vec<ProcessComponent>,
+    nodes: Vec<Box<dyn Processor + Send>>,
+    buffers: Vec<f32x2>,
     edges: Vec<Vec<usize>>,
 }
 
 impl Processor for ProcessSchedule {
 
+    // num_voices: new number of voices
     fn add_voice(&mut self, norm_freq: f32) {
 
-        for node in &mut self.nodes {
-            node.sample_buffer.push(ZERO_SAMPLE);
-            node.processor.add_voice(norm_freq);
+        for processor in self.nodes.iter_mut() {
+            processor.add_voice(norm_freq);
         }
     }
 
+    // num_voices: new number of voices
     fn remove_voice(&mut self, voice_idx: usize) {
 
-        for node in &mut self.nodes {
-            node.sample_buffer.swap_remove(voice_idx);
-            node.processor.remove_voice(voice_idx);
+        for processor in self.nodes.iter_mut() {
+            processor.remove_voice(voice_idx);
         }
     }
 
-    fn process(&mut self, _voice_idx: usize, _inputs: &mut StereoSample) {
+    fn process(&mut self, _input: f32x2, voice_idx: usize, editor_open: bool) -> f32x2 {
 
-        // C++ like index iteration is required here in order to work around Rust's borrowing
-        // rules because indexing, as opposed to, say, iter_mut() doesn't hold a long borrow
+        let mut out = f32x2::splat(0.);
 
-        for i in 0..self.nodes.len() {
+        for (i, (node, edges)) in self.nodes.iter_mut().zip(self.edges.iter()).enumerate() {
+            let node_out = node.process(self.buffers[i], voice_idx, editor_open);
 
-            self.nodes[i].process();
-
-            if  self.edges[i].is_empty() {
-
-                // self.nodes[i].output_to_buffer(inputs);
-            }
-
-            for &j in &self.edges[i] {
-
-                for k in 0..self.nodes[i].sample_buffer.len() {
-
-                    let sample = self.nodes[i].sample_buffer[k];
-
-                    self.nodes[j].sample_buffer[k] += sample;
+            for &edge in edges {
+                if edge == usize::MAX {
+                    out += node_out;
+                } else {
+                    self.buffers[edge] += node_out;
                 }
             }
         }
+
+        out
     }
 
-    fn initialize(&mut self) -> (bool, u32) {
-        self.nodes.iter_mut().map(|node| node.processor.initialize());
+    fn initialize(&mut self, sample_rate: f32) -> (bool, u32) {
+        self.nodes.iter_mut().for_each(|node| { node.initialize(sample_rate); });
         (true, 0)
     }
 
     fn reset(&mut self) {
-        self.nodes.iter_mut().for_each(|node| node.processor.reset());
+        self.nodes.iter_mut().for_each(|node| node.reset());
     }
 }
 
 impl ProcessSchedule {
-    pub(super) fn push(&mut self, processor: Box<dyn Processor + Send>, successors: Vec<usize>) {
+    pub(super) fn push(
+        &mut self, processor: Box<dyn Processor + Send>,
+        outputs: Vec<usize>,
+    ) {
+        self.buffers.push(f32x2::splat(0.));
         self.nodes.push(processor.into());
-        self.edges.push(successors);
-    }
-}
-
-pub struct ProcessComponent {
-    processor: Box<dyn Processor + Send>,
-    sample_buffer: ArrayVec<StereoSample, 16>,
-}
-
-impl From<Box<dyn Processor + Send>> for ProcessComponent {
-    fn from(processor: Box<dyn Processor + Send>) -> Self {
-        Self {
-            processor,
-            sample_buffer: Default::default()
-        }
-    }
-}
-
-impl ProcessComponent {
-
-    pub fn process(&mut self) {
-        // for sample in self.sample_buffer.iter_mut() {
-        //     self.processor.process(sample);
-        // }   
-    }
-
-    pub fn output_to_buffer(&mut self, inputs: &mut [StereoSample]) {
-
-        for (&output, input) in self.sample_buffer.iter().zip(inputs.iter_mut()) {
-            *input += output;
-        }
+        self.edges.push(outputs);
     }
 }
 

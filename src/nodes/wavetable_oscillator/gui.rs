@@ -28,7 +28,7 @@ impl SeenthNode for WTOscParams {
                     ));
 
                     ui.add(ParamWidget::<Knob, ParamHandle<_>>::default(
-                        (self.pan.deref(), setter).into(),
+                        (self.pan.as_ref().deref(), setter).into(),
                     ));
                 });
 

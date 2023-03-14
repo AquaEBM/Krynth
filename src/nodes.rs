@@ -7,9 +7,7 @@ pub use nih_plug_egui::{
 };
 
 use parking_lot::Mutex;
-use arrayvec::ArrayVec;
 use plugin_util::{
-    dsp::sample::*,
     gui::widgets::*,
     parameter::{Modulable, ParamHandle},
 };
@@ -17,7 +15,7 @@ use plugin_util::{
 use rtrb::{Consumer, Producer};
 pub use std::sync::Arc;
 
-use std::any::Any;
+use std::{any::Any, simd::f32x2};
 
 pub(crate) trait Processor {
 
@@ -25,9 +23,9 @@ pub(crate) trait Processor {
 
     fn remove_voice(&mut self, voice_idx: usize);
 
-    fn process(&mut self, voice_index: usize, inputs: &mut StereoSample);
+    fn process(&mut self, input: f32x2, voice_idx: usize, editor_open: bool) -> f32x2;
 
-    fn initialize(&mut self) -> (bool, u32);
+    fn initialize(&mut self, sample_rate: f32) -> (bool, u32);
 
     fn reset(&mut self);
 }
@@ -40,26 +38,10 @@ pub(crate) trait SeenthNode: Params + Any {
     fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response;
 
     fn processor_node(self: Arc<Self>) -> Box<ProcessNode>;
-
-    fn ports(&self) -> AudioIOLayout {
-        AudioIOLayout {
-            main_input_channels: NonZeroU32::new(2),
-            main_output_channels: NonZeroU32::new(2),
-            ..AudioIOLayout::const_default()
-        }
-    }
 }
 
 pub(crate) trait SeenthStandAlonePlugin: SeenthNode + Default {
     type Processor: Processor + Send;
-
-    /// Audio layout for this plugin, all frame sizes must be set to 2 (stereo),
-    /// or 0 (None) on a main input/output to indicate that there is no such port
-    const PORTS: AudioIOLayout = AudioIOLayout {
-        main_input_channels: NonZeroU32::new(2),
-        main_output_channels: NonZeroU32::new(2),
-        ..AudioIOLayout::const_default()
-    };
 
     fn processor(self: Arc<Self>) -> Self::Processor;
     fn editor_state(&self) -> Arc<EguiState>;
@@ -73,5 +55,5 @@ fn modulable<T: Param>(param: T) -> ModulableParamHandle<T> {
     Modulable::from(param)
 }
 
-mod audio_graph;
-mod wavetable_oscillator;
+pub mod audio_graph;
+pub mod wavetable_oscillator;

@@ -16,7 +16,7 @@ pub(crate) struct WTOscParams {
     #[id = "level"]
     level: ModulableParamHandle<FloatParam>,
     #[id = "pan"]
-    pan: ModulableParamHandle<FloatParam>,
+    pan: Arc<ModulableParamHandle<FloatParam>>,
     #[id = "unison"]
     num_unison_voices: ModulableParamHandle<IntParam>,
     #[id = "frame"]
@@ -46,10 +46,10 @@ impl Default for WTOscParams {
                 .with_value_to_string(v2s_f32_rounded(3)),
             ),
 
-            pan: modulable(
+            pan: Arc::new(modulable(
                 FloatParam::new("Pan", 0.5, FloatRange::Linear { min: 0., max: 1. })
                     .with_value_to_string(v2s_f32_rounded(3)),
-            ),
+            )),
 
             num_unison_voices: modulable(IntParam::new(
                 "Unison",
