@@ -12,7 +12,7 @@ type WaveFrame = [f32; WAVE_FRAME_LEN + 1];
 type WaveTable = [WaveFrame ; FRAMES_PER_WT];
 
 #[derive(Params)]
-pub(crate) struct WTOscParams {
+pub struct WTOscParams {
     #[id = "level"]
     level: ModulableParamHandle<FloatParam>,
     #[id = "pan"]

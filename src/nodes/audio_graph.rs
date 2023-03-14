@@ -8,7 +8,7 @@ use plugin_util::dsp::graph::AudioGraph;
 use std::{any::TypeId, collections::HashMap};
 
 #[derive(Params)]
-pub(crate) struct SeenthParams {
+pub struct SeenthParams {
     editor_state: Arc<EguiState>,
     message_sender: Option<Mutex<(Producer<ProcessSchedule>, Consumer<ProcessSchedule>)>>,
     graph: AtomicRefCell<AudioGraph<Arc<dyn SeenthNode>>>,

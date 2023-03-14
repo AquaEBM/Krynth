@@ -1,10 +1,10 @@
 #![feature(array_chunks, once_cell, portable_simd)]
 
-mod nodes;
+pub mod nodes;
 use arrayvec::ArrayVec;
 use nodes::*;
 
-struct SeenthPlugin<T: SeenthStandAlonePlugin, const VOICES: usize = MAX_POLYPHONY> {
+pub struct SeenthPlugin<T: SeenthStandAlonePlugin, const VOICES: usize = MAX_POLYPHONY> {
     voice_handler: ArrayVec<u8, VOICES>,
     params: Arc<T>,
     processor: T::Processor,

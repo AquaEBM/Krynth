@@ -17,7 +17,7 @@ pub use std::sync::Arc;
 
 use std::{any::Any, simd::f32x2};
 
-pub(crate) trait Processor {
+pub trait Processor {
 
     fn add_voice(&mut self, norm_freq: f32);
 
@@ -30,9 +30,9 @@ pub(crate) trait Processor {
     fn reset(&mut self);
 }
 
-type ProcessNode = dyn Processor + Send;
+pub type ProcessNode = dyn Processor + Send;
 
-pub(crate) trait SeenthNode: Params + Any {
+pub trait SeenthNode: Params + Any {
     fn type_name(&self) -> &'static str;
 
     fn ui(&self, ui: &mut Ui, setter: &ParamSetter) -> Response;
@@ -40,7 +40,7 @@ pub(crate) trait SeenthNode: Params + Any {
     fn processor_node(self: Arc<Self>) -> Box<ProcessNode>;
 }
 
-pub(crate) trait SeenthStandAlonePlugin: SeenthNode + Default {
+pub trait SeenthStandAlonePlugin: SeenthNode + Default {
     type Processor: Processor + Send;
 
     fn processor(self: Arc<Self>) -> Self::Processor;
